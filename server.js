@@ -28,18 +28,27 @@ io.on('connection', (client) => {
     console.log(error);
   });
 
-  client.on('Enter Room', (room) => {
-    console.log('room: ', room);
-    client.join(room);
-    io.to(room).emit('new member');
+  client.on('Enter Room', ({roomName}) => {
+    console.log('Enter Room - all rooms', io.sockets.adapter.rooms);
 
-    console.log('all rooms', io.sockets.adapter.rooms);
-
-    CurrentRooms.push(room);
+    console.log('Enter Room - room: ', roomName);
+    if (io.sockets.adapter.rooms[roomName])
+    {
+      client.join(roomName);
+      io.to(roomName).emit('new member');
+      //console.log('all rooms', io.sockets.adapter.rooms);
+      console.log(`client entered room: ${roomName}`);
+      CurrentRooms.push(roomName);
+      client.emit(`joined room`, { room: roomName });
+    } else {
+      client.emit('room does not exist', { room: roomName });
+    }
   });
 
   client.on('Create Room', () => {
     let selectedRoom = null;
+
+    // TODO: create a system to ensure infinite number of rooms can be created
     RoomNames.some((name) => {
       if (!CurrentRooms.includes(name)) {
         selectedRoom = name;
@@ -52,7 +61,7 @@ io.on('connection', (client) => {
     client.emit(`joined room`, { room: selectedRoom });
     io.to(selectedRoom).emit('new member');
 
-    // console.log('all rooms', io.sockets.adapter.rooms);
+    console.log('Create Room - all rooms', io.sockets.adapter.rooms);
   });
 });
 
