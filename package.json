@@ -5,6 +5,7 @@
     "prettier-format": "prettier --config .prettierrc 'src/**/*.ts' --write"
   },
   "dependencies": {
+    "@types/socket.io": "^2.1.11",
     "nodemon": "^2.0.4",
     "socket.io": "^2.3.0"
   },

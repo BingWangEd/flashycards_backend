@@ -1,9 +1,14 @@
 const http = require('http');
 const socketIO = require('socket.io');
+const dotenv = require('dotenv')
+const ENV = process.env.NODE_ENV || 'development'
 
-const PORT = 3030;
+if (ENV === 'development') dotenv.config();
 
-const CurrentRooms = [];
+const PORT = process.env.PORT;
+console.log(`Port: ${PORT}`);
+
+const CurrentRooms: string[] = [];
 
 const RoomNames = ['Apple', 'Watermelon', 'Orange', 'Strawberry', 'Grape'];
 
@@ -17,7 +22,7 @@ const io = socketIO(server, {
   pingTimeout: 30000,
 });
 
-io.on('connection', (client) => {
+io.on('connection', (client: SocketIO.Socket) => {
   const printClientAllInfo = () => Object.keys(io.sockets).forEach((key) => console.log(key));
   
   client.on('disconnect', () => {
@@ -56,16 +61,18 @@ io.on('connection', (client) => {
       }
     })
 
-    client.join(selectedRoom);
-    CurrentRooms.push(selectedRoom);
-    client.emit(`joined room`, { room: selectedRoom });
-    io.to(selectedRoom).emit('new member');
+    if (selectedRoom) {
+      client.join(selectedRoom);
+      CurrentRooms.push(selectedRoom);
+      client.emit(`joined room`, { room: selectedRoom });
+      io.to(selectedRoom).emit('new member');
 
-    console.log('Create Room - all rooms', io.sockets.adapter.rooms);
+      console.log('Create Room - all rooms', io.sockets.adapter.rooms);
+    };
   });
 });
 
-server.listen(PORT, (error) => {
+server.listen(PORT, (error: Error) => {
   if (error) throw error;
   console.log(`listening on port ${PORT}`);
 });
