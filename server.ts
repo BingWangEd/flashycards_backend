@@ -1,3 +1,6 @@
+import GameRoom from "./src/class/Room";
+import { Map } from 'immutable';
+
 const http = require('http');
 const socketIO = require('socket.io');
 const dotenv = require('dotenv')
@@ -5,10 +8,25 @@ const ENV = process.env.NODE_ENV || 'development'
 
 if (ENV === 'development') dotenv.config();
 
+export enum WebSocketEvent {
+  CreateRoom = 'create room',
+  EnterRoom = 'enter room',
+  SubmitName = 'submit name',
+  SetWords = 'set words',
+}
+
+enum WebSocketEmissionEvent {
+  GetNewMember = 'got new member',
+  ConfirmRoom = 'confirmed room exists',
+  RejectRoom = 'rejected room exists',
+  JoinRoom = 'joined room',
+  CreateNewRoom = 'created new room',
+}
+
 const PORT = process.env.PORT;
 console.log(`Port: ${PORT}`);
 
-const CurrentRooms: string[] = [];
+let CurrentRooms = Map<string, GameRoom>();
 
 const RoomNames = ['Apple', 'Watermelon', 'Orange', 'Strawberry', 'Grape'];
 
@@ -33,42 +51,49 @@ io.on('connection', (client: SocketIO.Socket) => {
     console.log(error);
   });
 
-  client.on('Enter Room', ({roomName}) => {
-    console.log('Enter Room - all rooms', io.sockets.adapter.rooms);
-
-    console.log('Enter Room - room: ', roomName);
-    if (io.sockets.adapter.rooms[roomName])
+  client.on(WebSocketEvent.EnterRoom, ({roomCode}) => {
+    if (io.sockets.adapter.rooms[roomCode])
     {
-      client.join(roomName);
-      io.to(roomName).emit('new member');
-      //console.log('all rooms', io.sockets.adapter.rooms);
-      console.log(`client entered room: ${roomName}`);
-      CurrentRooms.push(roomName);
-      client.emit(`joined room`, { room: roomName });
+      client.emit(WebSocketEmissionEvent.ConfirmRoom, { roomCode });
     } else {
-      client.emit('room does not exist', { room: roomName });
+      client.emit(WebSocketEmissionEvent.RejectRoom, { roomCode });
     }
   });
 
-  client.on('Create Room', () => {
+  client.on(WebSocketEvent.CreateRoom, () => {
     let selectedRoom = null;
 
     // TODO: create a system to ensure infinite number of rooms can be created
     RoomNames.some((name) => {
-      if (!CurrentRooms.includes(name)) {
+      if (!CurrentRooms.has(name)) {
         selectedRoom = name;
         return true;
       }
     })
 
     if (selectedRoom) {
-      client.join(selectedRoom);
-      CurrentRooms.push(selectedRoom);
-      client.emit(`joined room`, { room: selectedRoom });
-      io.to(selectedRoom).emit('new member');
-
-      console.log('Create Room - all rooms', io.sockets.adapter.rooms);
+      client.join(selectedRoom); // can I simply create a room w/o joining? line 84 might cause the user to join twice
+      CurrentRooms = CurrentRooms.set(selectedRoom, new GameRoom(selectedRoom));
+      client.emit(WebSocketEmissionEvent.CreateNewRoom, { roomCode: selectedRoom });
     };
+  });
+
+  client.on(WebSocketEvent.SubmitName, ({ name, roomCode }: { name: string, roomCode: string }) => {
+    if (io.sockets.adapter.rooms[roomCode] && CurrentRooms.get(roomCode))
+    {
+      client.join(roomCode);
+      CurrentRooms.get(roomCode)!.addMember(client.id, name);
+      client.emit(WebSocketEmissionEvent.JoinRoom, { name });
+
+      const allMembers = CurrentRooms.get(roomCode)!.getAllMemberNames();
+
+      io.to(roomCode).emit(WebSocketEmissionEvent.GetNewMember, {
+        roomCode,
+        allMembers,
+      });
+    } else {
+      client.emit(WebSocketEmissionEvent.RejectRoom, { roomCode });
+    }
   });
 });
 
