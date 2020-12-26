@@ -16,6 +16,7 @@ export enum WebSocketEvent {
 }
 
 enum WebSocketEmissionEvent {
+  Connect = 'connected to web socket',
   GetNewMember = 'got new member',
   ConfirmRoom = 'confirmed room exists',
   RejectRoom = 'rejected room exists',
@@ -41,8 +42,11 @@ const io = socketIO(server, {
 });
 
 io.on('connection', (client: SocketIO.Socket) => {
+  console.log(`User joined: ${client.id}`);
   const printClientAllInfo = () => Object.keys(io.sockets).forEach((key) => console.log(key));
   
+  client.emit(WebSocketEmissionEvent.Connect);
+
   client.on('disconnect', () => {
     console.log(`User disconnected: ${client.id}`);
   });
@@ -78,11 +82,11 @@ io.on('connection', (client: SocketIO.Socket) => {
     };
   });
 
-  client.on(WebSocketEvent.SubmitName, ({ name, roomCode }: { name: string, roomCode: string }) => {
+  client.on(WebSocketEvent.SubmitName, ({ name, roomCode, playerRole }: { name: string, roomCode: string, playerRole: string }) => {
     if (io.sockets.adapter.rooms[roomCode] && CurrentRooms.get(roomCode))
     {
       client.join(roomCode);
-      CurrentRooms.get(roomCode)!.addMember(client.id, name);
+      CurrentRooms.get(roomCode)!.addMember(client.id, name, playerRole);
       client.emit(WebSocketEmissionEvent.JoinRoom, { name });
 
       const allMembers = CurrentRooms.get(roomCode)!.getAllMemberNames();

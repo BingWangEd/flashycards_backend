@@ -1,7 +1,8 @@
 import { Map, List } from 'immutable';
 
 interface IMember {
-  name: string | undefined,
+  name: string,
+  playerRole: string
 };
 
 class GameRoom {
@@ -13,8 +14,8 @@ class GameRoom {
     this.members = Map();
   }
 
-  public addMember = (socketId: string, name: string) => {
-    this.members = this.members.set(socketId, { name });
+  public addMember = (socketId: string, name: string, playerRole: string) => {
+    this.members = this.members.set(socketId, { name, playerRole });
   }
 
   public removeMember = (socketId: string) => {
