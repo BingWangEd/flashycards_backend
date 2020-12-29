@@ -22,6 +22,7 @@ enum WebSocketEmissionEvent {
   RejectRoom = 'rejected room exists',
   JoinRoom = 'joined room',
   CreateNewRoom = 'created new room',
+  StartGame = 'started game',
 }
 
 const PORT = process.env.PORT;
@@ -79,15 +80,15 @@ io.on('connection', (client: SocketIO.Socket) => {
       client.join(selectedRoom); // can I simply create a room w/o joining? line 84 might cause the user to join twice
       CurrentRooms = CurrentRooms.set(selectedRoom, new GameRoom(selectedRoom));
       client.emit(WebSocketEmissionEvent.CreateNewRoom, { roomCode: selectedRoom });
-    };
+    }
   });
 
-  client.on(WebSocketEvent.SubmitName, ({ name, roomCode, playerRole }: { name: string, roomCode: string, playerRole: string }) => {
+  client.on(WebSocketEvent.SubmitName, ({ playerName, roomCode, playerRole }: { playerName: string, roomCode: string, playerRole: string }) => {
     if (io.sockets.adapter.rooms[roomCode] && CurrentRooms.get(roomCode))
     {
       client.join(roomCode);
-      CurrentRooms.get(roomCode)!.addMember(client.id, name, playerRole);
-      client.emit(WebSocketEmissionEvent.JoinRoom, { name });
+      CurrentRooms.get(roomCode)!.addMember(client.id, playerName, playerRole);
+      client.emit(WebSocketEmissionEvent.JoinRoom, { playerName });
 
       const allMembers = CurrentRooms.get(roomCode)!.getAllMemberNames();
 
@@ -98,6 +99,18 @@ io.on('connection', (client: SocketIO.Socket) => {
     } else {
       client.emit(WebSocketEmissionEvent.RejectRoom, { roomCode });
     }
+
+    client.on(WebSocketEvent.SetWords, ({ words, roomCode }: { words: [string, string][], roomCode: string }) => {
+      const room = CurrentRooms.get(roomCode);
+      if (room) {
+        room.createNewGame(words, 1);
+        room.game && room.game.printCurrentWordsAndOrder();
+        io.to(roomCode).emit(WebSocketEmissionEvent.StartGame, {
+          shuffledWords: room.game && room.game.shuffledWords,
+          cardStates: room.game && room.game.cardStates,
+        });
+      }
+    });
   });
 });
 
