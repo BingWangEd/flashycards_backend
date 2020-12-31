@@ -22,6 +22,18 @@ const initialCardState = {
   isOpen: false,
 }
 
+export enum ActionType {
+  Flip = 'flip card',
+  Deactivate = 'deactivate card',
+}
+
+export interface ICardAction {
+  type: ActionType;
+  position: number;
+  player: string;
+  roomCode: string;
+}
+
 export class Game {
   private wordPool: [string, string][];
   private seedGenerator: Generator<number>;
@@ -92,4 +104,27 @@ export class Game {
   public printCurrentWordsAndOrder = (): void => {
     console.log('Current words: ', this.shuffledWords);
   }
+
+  public updateCardStates = (position: number, action: ActionType): void => {
+      const currentState = this.cardStates && this.cardStates.get(position);
+      if (!this.cardStates || !currentState || !currentState.isActive) return;
+
+      switch (action) {
+        case ActionType.Flip:
+          this.cardStates = this.cardStates.set(position, {
+            isActive: true,
+            isOpen: true,
+          })
+          break;
+        case ActionType.Deactivate:
+          this.cardStates = this.cardStates.set(position, {
+            isActive: false,
+            isOpen: true,
+          })
+          break;
+        default:
+          console.log(`Action ${action} is not recognizable`);
+      }
+    }
+  
 }

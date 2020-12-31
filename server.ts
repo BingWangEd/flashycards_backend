@@ -1,5 +1,6 @@
 import GameRoom from "./src/class/Room";
 import { Map } from 'immutable';
+import { ICardAction } from "./src/class/Game";
 
 const http = require('http');
 const socketIO = require('socket.io');
@@ -13,6 +14,7 @@ export enum WebSocketEvent {
   EnterRoom = 'enter room',
   SubmitName = 'submit name',
   SetWords = 'set words',
+  SendAction = 'send action',
 }
 
 enum WebSocketEmissionEvent {
@@ -23,6 +25,7 @@ enum WebSocketEmissionEvent {
   JoinRoom = 'joined room',
   CreateNewRoom = 'created new room',
   StartGame = 'started game',
+  ReceiveAction = 'received action',
 }
 
 const PORT = process.env.PORT;
@@ -30,7 +33,7 @@ console.log(`Port: ${PORT}`);
 
 let CurrentRooms = Map<string, GameRoom>();
 
-const RoomNames = ['Apple', 'Watermelon', 'Orange', 'Strawberry', 'Grape'];
+const RoomNames = ['Apple', 'Watermelon', 'Orange', 'Strawberry', 'Grape', 'Blueberry', 'Lychee', 'Pear', 'Banana', 'Tangerine'];
 
 const server = http.createServer();
 const io = socketIO(server, {
@@ -54,6 +57,16 @@ io.on('connection', (client: SocketIO.Socket) => {
 
   client.on('error', (error) => {
     console.log(error);
+  });
+
+  client.on(WebSocketEvent.SendAction, (action: ICardAction) => {
+    const room = CurrentRooms.get(action.roomCode);
+    if (!io.sockets.adapter.rooms[action.roomCode] || !room) return;
+
+    io.to(action.roomCode).emit(WebSocketEmissionEvent.ReceiveAction, action);
+    
+    const { game } = room;
+    game && game.updateCardStates(action.position, action.type);
   });
 
   client.on(WebSocketEvent.EnterRoom, ({roomCode}) => {
