@@ -1,4 +1,4 @@
-import GameRoom from "./src/class/Room";
+import GameRoom, { RoomState } from "./src/class/Room";
 import { Map } from 'immutable';
 import { ICardAction } from "./src/class/Game";
 
@@ -70,7 +70,8 @@ io.on('connection', (client: SocketIO.Socket) => {
   });
 
   client.on(WebSocketEvent.EnterRoom, ({roomCode}) => {
-    if (io.sockets.adapter.rooms[roomCode])
+    const room = CurrentRooms.get(roomCode);
+    if (io.sockets.adapter.rooms[roomCode] && room && room.roomState === RoomState.Open)
     {
       client.emit(WebSocketEmissionEvent.ConfirmRoom, { roomCode });
     } else {
@@ -97,13 +98,14 @@ io.on('connection', (client: SocketIO.Socket) => {
   });
 
   client.on(WebSocketEvent.SubmitName, ({ playerName, roomCode, playerRole }: { playerName: string, roomCode: string, playerRole: string }) => {
-    if (io.sockets.adapter.rooms[roomCode] && CurrentRooms.get(roomCode))
+    const room  = CurrentRooms.get(roomCode);
+    if (io.sockets.adapter.rooms[roomCode] && room && room.roomState === RoomState.Open)
     {
       client.join(roomCode);
-      CurrentRooms.get(roomCode)!.addMember(client.id, playerName, playerRole);
+      room.addMember(client.id, playerName, playerRole);
       client.emit(WebSocketEmissionEvent.JoinRoom, { playerName });
 
-      const allMembers = CurrentRooms.get(roomCode)!.getAllMemberNames();
+      const allMembers = room.getAllMemberNames();
 
       io.to(roomCode).emit(WebSocketEmissionEvent.GetNewMember, {
         roomCode,
