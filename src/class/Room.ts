@@ -1,12 +1,6 @@
 import { Map, List } from 'immutable';
-import { Game } from './Game';
+import { Game, WordCard, CardState, ICardAction, IResponseAction, ActionType, IMember } from './Game';
 import { numberIncrementer } from '../utils/utils';
-
-interface IMember {
-  name: string,
-  role: string,
-  socketId: string,
-}
 
 export enum RoomState {
   Open = 'open',
@@ -60,8 +54,34 @@ class GameRoom {
 
   public getAllMemberNames = (): List<string> => List(this.members.values()).map((member => member.name));
 
-  public createNewGame = (words: [string, string][], seedNumber: number): void => {
+  public createNewGame = (words: [string, string][], seedNumber: number): {
+    shuffledWords: List<WordCard>,
+    cardStates: List<CardState>,
+  } => {
     this.game = new Game(words, seedNumber);
+    return {
+      shuffledWords: this.game.shuffledWords,
+      cardStates: this.game.cardStates,
+    }
+  }
+
+  public implementGameAction = (action: ICardAction): IResponseAction[] => {
+    if (!this.game) throw Error('Game does not exist.');
+
+    const { actions, changeTurns } = this.game.updateCardStates(action);
+    let finalActions: IResponseAction[] = actions;
+
+    if (changeTurns) {
+      this.currentPlayer = this.getNextPlayer();
+      if (!this.currentPlayer) throw Error('No player left in the game');
+
+      finalActions.push({
+        type: ActionType.ChangeTurns,
+        payload: this.currentPlayer,
+      } as IResponseAction)
+    }
+    
+    return finalActions;
   }
 }
 

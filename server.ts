@@ -61,12 +61,12 @@ io.on('connection', (client: SocketIO.Socket) => {
 
   client.on(WebSocketEvent.SendAction, (action: ICardAction) => {
     const room = CurrentRooms.get(action.roomCode);
-    if (!io.sockets.adapter.rooms[action.roomCode] || !room) return;
 
-    io.to(action.roomCode).emit(WebSocketEmissionEvent.ReceiveAction, action);
+    if (!io.sockets.adapter.rooms[action.roomCode] || !room) return; // TODO: error handling
     
-    const { game } = room;
-    game && game.updateCardStates(action.position, action.type);
+    const actions = room.implementGameAction(action);
+
+    io.to(action.roomCode).emit(WebSocketEmissionEvent.ReceiveAction, actions);
   });
 
   client.on(WebSocketEvent.EnterRoom, ({roomCode}) => {
@@ -118,11 +118,11 @@ io.on('connection', (client: SocketIO.Socket) => {
     client.on(WebSocketEvent.SetWords, ({ words, roomCode }: { words: [string, string][], roomCode: string }) => {
       const room = CurrentRooms.get(roomCode);
       if (room) {
-        room.createNewGame(words, 1);
-        room.game && room.game.printCurrentWordsAndOrder();
+        const { shuffledWords, cardStates } = room.createNewGame(words, 1);
+
         io.to(roomCode).emit(WebSocketEmissionEvent.StartGame, {
-          shuffledWords: room.game && room.game.shuffledWords,
-          cardStates: room.game && room.game.cardStates,
+          shuffledWords,
+          cardStates,
         });
       }
     });

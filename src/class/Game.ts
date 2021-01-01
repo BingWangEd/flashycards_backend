@@ -6,12 +6,12 @@ enum CardSide {
   Translation = 'translation'
 }
 
-interface CardState {
+export interface CardState {
   isActive: boolean,
   isOpen: boolean,
 }
 
-interface WordCard {
+export interface WordCard {
   word: string,
   side: CardSide,
   counterpart: string,
@@ -23,8 +23,10 @@ const initialCardState = {
 }
 
 export enum ActionType {
-  Flip = 'flip card',
+  Open = 'open card',
+  Close = 'close card',
   Deactivate = 'deactivate card',
+  ChangeTurns = 'change turns',
 }
 
 export interface ICardAction {
@@ -34,6 +36,20 @@ export interface ICardAction {
   roomCode: string;
 }
 
+export interface IMember {
+  name: string,
+  role: string,
+  socketId: string,
+}
+
+export type IResponseAction = {
+  type: ActionType;
+  // number[] for card actions; string for change turns
+  payload: number[] | IMember;
+  player?: string;
+  timeout?: number;
+}
+
 export class Game {
   private wordPool: [string, string][];
   private seedGenerator: Generator<number>;
@@ -41,6 +57,9 @@ export class Game {
   private selectedWords: [string, string][];
   shuffledWords: List<WordCard>;
   cardStates: List<CardState>;
+  flippedCard: (WordCard & { position: number }) | undefined;
+  private matchedPairs: number = 0;
+  gameOver = this.matchedPairs === this.wordNumber;
 
   constructor(wordPool: [string, string][], seedNumber: number) {
     this.seedGenerator = numberIncrementer(seedNumber);
@@ -101,25 +120,103 @@ export class Game {
     console.log('Current words: ', this.shuffledWords);
   }
 
-  public updateCardStates = (position: number, action: ActionType): void => {
+  public updateCardStates = (action: ICardAction): { actions: IResponseAction[], changeTurns: boolean } => {
+      const { position, type, player } = action;
       const currentState = this.cardStates && this.cardStates.get(position);
-      if (!this.cardStates || !currentState || !currentState.isActive) return;
+      const currentCard = this.shuffledWords.get(action.position);
 
-      switch (action) {
-        case ActionType.Flip:
-          this.cardStates = this.cardStates.set(position, {
-            isActive: true,
-            isOpen: true,
-          })
-          break;
-        case ActionType.Deactivate:
-          this.cardStates = this.cardStates.set(position, {
-            isActive: false,
-            isOpen: true,
-          })
-          break;
+      if (!this.cardStates || !currentState || !currentState.isActive || !currentCard) throw Error('Card does not exist');
+
+      switch (type) {
+        case ActionType.Open:
+          if (!this.flippedCard) { 
+            this.flippedCard = { 
+              position,
+              ...currentCard
+            };
+            console.log('this.flippedCard: ', this.flippedCard);
+            return {
+              actions: [{
+                type,
+                payload: [position],
+                player,
+              }],
+              changeTurns: false,
+            };
+          }
+
+          // Two flipped cards match
+          if (this.flippedCard.counterpart === currentCard.word) {
+            // Lock the two cards' states
+            this.cardStates = this.cardStates.set(position, {
+              isActive: false,
+              isOpen: true,
+            });
+
+            this.cardStates = this.cardStates.set(
+              this.flippedCard.position,
+              {
+                isActive: false,
+                isOpen: true,
+              }
+            );
+
+            // Define two actions for front-end
+            const action1 = {
+              type,
+              payload: [position],
+              player,
+            }
+            const action2 = {
+              type: ActionType.Deactivate,
+              payload: [this.flippedCard.position, position],
+              player,
+            }
+
+            // Increment matchedPairs
+            this.matchedPairs = this.matchedPairs + 1;
+
+            // Clean up flippedCard
+            this.flippedCard = undefined;
+
+            return {
+              actions: [action1, action2],
+              changeTurns: false,
+            };
+          } else { // No match
+            // Flip existing open card over
+            this.cardStates = this.cardStates.set(
+              this.flippedCard.position,
+              {
+                isActive: false,
+                isOpen: false,
+              }
+            );
+
+            // Define two actions for front-end
+            const action1 = {
+              type,
+              payload: [position],
+              player,
+            }
+
+            const action2 = {
+              type: ActionType.Close,
+              payload: [this.flippedCard.position, position],
+              player,
+            }
+
+            // Clean up flippedCard
+            this.flippedCard = undefined;
+
+            return {
+              actions: [action1, action2],
+              changeTurns: true, // Change turns
+            };
+          }
+
         default:
-          console.log(`Action ${action} is not recognizable`);
+          throw Error(`Action ${action} is not recognizable`);
       }
     }
   
