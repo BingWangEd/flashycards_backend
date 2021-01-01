@@ -1,9 +1,11 @@
 import { Map, List } from 'immutable';
 import { Game } from './Game';
+import { numberIncrementer } from '../utils/utils';
 
 interface IMember {
-  playerName: string,
-  playerRole: string,
+  name: string,
+  role: string,
+  socketId: string,
 }
 
 export enum RoomState {
@@ -16,6 +18,7 @@ class GameRoom {
   private roomName: string;
   public game: Game | undefined;
   public roomState: RoomState;
+  public currentPlayer: IMember | undefined;
 
   constructor (roomName: string) {
     this.roomName = roomName;
@@ -25,7 +28,11 @@ class GameRoom {
 
   public addMember = (socketId: string, playerName: string, playerRole: string): void => {
     if (this.roomState === RoomState.Open) {
-      this.members = this.members.set(socketId, { playerName, playerRole });
+      this.members = this.members.set(socketId, {
+        name: playerName,
+        role: playerRole,
+        socketId: socketId
+      });
     }
   }
 
@@ -33,11 +40,25 @@ class GameRoom {
     if (this.roomState === RoomState.Open) {
       this.members = this.members.remove(socketId);
     }
+
+    // TODO: update current player
+  }
+
+  private getNextPlayer = (): IMember | undefined => {
+    const memberSeq = this.members.keySeq();
+    const currIndex = memberSeq.findIndex(key => this.currentPlayer !== undefined && key === this.currentPlayer.socketId);
+
+    console.log('currIndex: ', currIndex);
+
+    if (!this.currentPlayer || currIndex + 1 === memberSeq.size) return this.members && this.members.valueSeq().first();
+
+    const nextKey = memberSeq.get(currIndex + 1) as string;
+    return this.members.get(nextKey);
   }
 
   public isEmpty = (): boolean => this.members.size > 0;
 
-  public getAllMemberNames = (): List<string> => List(this.members.values()).map((member => member.playerName));
+  public getAllMemberNames = (): List<string> => List(this.members.values()).map((member => member.name));
 
   public createNewGame = (words: [string, string][], seedNumber: number): void => {
     this.game = new Game(words, seedNumber);

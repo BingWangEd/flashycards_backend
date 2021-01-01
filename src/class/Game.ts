@@ -1,4 +1,4 @@
-import { random, shuffle } from "../utils/utils";
+import { random, shuffle, numberIncrementer } from "../utils/utils";
 import { List } from "immutable";
 
 enum CardSide {
@@ -43,7 +43,7 @@ export class Game {
   cardStates: List<CardState>;
 
   constructor(wordPool: [string, string][], seedNumber: number) {
-    this.seedGenerator = this.seedNumberIncrementer(seedNumber);
+    this.seedGenerator = numberIncrementer(seedNumber);
     const currentSeedNumber = this.seedGenerator.next().value;
     this.wordPool = wordPool;
     this.selectedWords = this.sampleCards(currentSeedNumber);
@@ -52,10 +52,6 @@ export class Game {
   }
 
   private createInitialCardStates = (cardNumber: number) => Array(cardNumber).fill(initialCardState);
-
-  private seedNumberIncrementer = function* (originalSeedNumber: number): Generator<number> {
-    while (true) yield originalSeedNumber++;
-  }
 
   private sampleCards = (seedNumber: number): [string, string][] => {
     const allNumber = this.wordPool.length;

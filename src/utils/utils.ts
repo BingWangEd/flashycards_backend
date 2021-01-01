@@ -30,3 +30,7 @@ export const shuffle = <T>(array: T[], seed: number): T[] => {// <-- ADDED ARGUM
 
   return arrayCopy;
 }
+
+export const numberIncrementer = function* (originalNumber: number): Generator<number> {
+  while (true) yield originalNumber++;
+}
