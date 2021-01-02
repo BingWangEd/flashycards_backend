@@ -1,6 +1,5 @@
-import GameRoom, { RoomState } from "./src/class/Room";
+import GameRoom, { RoomState, ICardAction } from "./src/class/Room";
 import { Map } from 'immutable';
-import { ICardAction } from "./src/class/Game";
 
 const http = require('http');
 const socketIO = require('socket.io');
@@ -59,26 +58,6 @@ io.on('connection', (client: SocketIO.Socket) => {
     console.log(error);
   });
 
-  client.on(WebSocketEvent.SendAction, (action: ICardAction) => {
-    const room = CurrentRooms.get(action.roomCode);
-
-    if (!io.sockets.adapter.rooms[action.roomCode] || !room) return; // TODO: error handling
-    
-    const actions = room.implementGameAction(action);
-
-    io.to(action.roomCode).emit(WebSocketEmissionEvent.ReceiveAction, actions);
-  });
-
-  client.on(WebSocketEvent.EnterRoom, ({roomCode}) => {
-    const room = CurrentRooms.get(roomCode);
-    if (io.sockets.adapter.rooms[roomCode] && room && room.roomState === RoomState.Open)
-    {
-      client.emit(WebSocketEmissionEvent.ConfirmRoom, { roomCode });
-    } else {
-      client.emit(WebSocketEmissionEvent.RejectRoom, { roomCode });
-    }
-  });
-
   client.on(WebSocketEvent.CreateRoom, () => {
     let selectedRoom = null;
 
@@ -91,9 +70,19 @@ io.on('connection', (client: SocketIO.Socket) => {
     })
 
     if (selectedRoom) {
-      client.join(selectedRoom); // can I simply create a room w/o joining? line 84 might cause the user to join twice
-      CurrentRooms = CurrentRooms.set(selectedRoom, new GameRoom(selectedRoom));
+      client.join(selectedRoom);
+      CurrentRooms = CurrentRooms.set(selectedRoom, new GameRoom(1));
       client.emit(WebSocketEmissionEvent.CreateNewRoom, { roomCode: selectedRoom });
+    }
+  });
+
+  client.on(WebSocketEvent.EnterRoom, ({roomCode}) => {
+    const room = CurrentRooms.get(roomCode);
+    if (io.sockets.adapter.rooms[roomCode] && room && room.roomState === RoomState.Open)
+    {
+      client.emit(WebSocketEmissionEvent.ConfirmRoom, { roomCode });
+    } else {
+      client.emit(WebSocketEmissionEvent.RejectRoom, { roomCode });
     }
   });
 
@@ -118,7 +107,7 @@ io.on('connection', (client: SocketIO.Socket) => {
     client.on(WebSocketEvent.SetWords, ({ words, roomCode }: { words: [string, string][], roomCode: string }) => {
       const room = CurrentRooms.get(roomCode);
       if (room) {
-        const { shuffledWords, cardStates } = room.createNewGame(words, 1);
+        const { shuffledWords, cardStates } = room.createNewGame(words);
 
         io.to(roomCode).emit(WebSocketEmissionEvent.StartGame, {
           shuffledWords,
@@ -126,6 +115,16 @@ io.on('connection', (client: SocketIO.Socket) => {
         });
       }
     });
+  });
+
+  client.on(WebSocketEvent.SendAction, (action: ICardAction) => {
+    const room = CurrentRooms.get(action.roomCode);
+
+    if (!io.sockets.adapter.rooms[action.roomCode] || !room) return; // TODO: error handling
+    
+    const actions = room.implementGameAction(action);
+
+    io.to(action.roomCode).emit(WebSocketEmissionEvent.ReceiveAction, actions);
   });
 });
 
