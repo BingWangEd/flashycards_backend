@@ -34,7 +34,7 @@ export enum ActionType {
   Close = 'close card',
   Deactivate = 'deactivate card',
   ChangeTurns = 'change turns',
-  IncrementScore = 'increment score',
+  ChangeScore = 'change score',
 }
 
 export interface ICardAction {
@@ -52,8 +52,8 @@ export interface IMember {
 
 export type IResponseAction = {
   type: ActionType;
-  payload: IMember | string | number[];
-  player?: string;
+  payload: IMember | number | number[];
+  player: string;
   timeout?: number;
 }
 
@@ -181,6 +181,7 @@ class GameRoom {
   public createNewGame = (wordPool: [string, string][]): {
     shuffledWords: List<WordCard>,
     cardStates: List<CardState>,
+    actions: IResponseAction[],
   } => {
     this.wordPool = List(wordPool);
     const currentSeedNumber = this.seedGenerator.next().value;
@@ -190,9 +191,21 @@ class GameRoom {
     this.shuffledWords = this.shuffleCards(currentSeedNumber);
     this.cardStates = List(this.createInitialCardStates(this.wordNumber*2));
 
+    console.log('this.members.size: ', this.members.size);
+    console.log('this.currentPlayer: ', this.currentPlayer);
+
+    if (!this.currentPlayer) throw Error(`Failed to start game. No player exists in the room.`);
+
+    const changeTurn = {
+      type: ActionType.ChangeTurns,
+      payload: this.currentPlayer,
+      player: this.currentPlayer.name,
+    }
+
     return {
       shuffledWords: this.shuffledWords,
       cardStates: this.cardStates,
+      actions: [changeTurn],
     }
   }
 
@@ -264,8 +277,8 @@ class GameRoom {
           this.flippedCard = undefined;
 
           const incrementPlayerScore = {
-            type: ActionType.IncrementScore,
-            payload: player,
+            type: ActionType.ChangeScore,
+            payload: currentScore + 1,
             player,
           }
 
@@ -300,6 +313,7 @@ class GameRoom {
           const changeTurn = {
             type: ActionType.ChangeTurns,
             payload: this.currentPlayer,
+            player: this.currentPlayer.name,
           }
 
           // Clean up flippedCard

@@ -107,17 +107,21 @@ io.on('connection', (client: SocketIO.Socket) => {
     client.on(WebSocketEvent.SetWords, ({ words, roomCode }: { words: [string, string][], roomCode: string }) => {
       const room = CurrentRooms.get(roomCode);
       if (room) {
-        const { shuffledWords, cardStates } = room.createNewGame(words);
+        const { shuffledWords, cardStates, actions } = room.createNewGame(words);
+
+        console.log('actions: ', actions);
 
         io.to(roomCode).emit(WebSocketEmissionEvent.StartGame, {
           shuffledWords,
           cardStates,
+          actions,
         });
       }
     });
   });
 
   client.on(WebSocketEvent.SendAction, (action: ICardAction) => {
+    // TODO: always send some response back
     const room = CurrentRooms.get(action.roomCode);
 
     if (!io.sockets.adapter.rooms[action.roomCode] || !room) return; // TODO: error handling
