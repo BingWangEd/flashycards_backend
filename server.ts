@@ -25,6 +25,7 @@ enum WebSocketEmissionEvent {
   CreateNewRoom = 'created new room',
   StartGame = 'started game',
   ReceiveAction = 'received action',
+  LeftRoom = 'member left room',
 }
 
 const PORT = process.env.PORT;
@@ -50,8 +51,27 @@ io.on('connection', (client: SocketIO.Socket) => {
   
   client.emit(WebSocketEmissionEvent.Connect);
 
-  client.on('disconnect', () => {
-    console.log(`User disconnected: ${client.id}`);
+  client.on('disconnecting', () => {
+    console.log(`User disconnecting: ${client.id}`);
+    // try{
+    //   console.log('[socket]','leave room :', room);
+    //   io.leave(room);
+    //   io.to(room).emit('user left', client.id);
+    // }catch(e){
+    //   console.log('[error]','leave room :', e);
+    //   io.emit('error','couldnt perform requested action');
+    // }
+    const clientRoom = Object.keys(client.rooms)[1];
+    const room = CurrentRooms.get(clientRoom);
+    if (!room) return;
+    if (room.members.size === 1) {
+      CurrentRooms.delete(clientRoom);
+    } else {
+      const member = room.members.get(client.id);
+
+      room.removeMember(client.id);
+      client.emit(WebSocketEmissionEvent.LeftRoom, { name: member ? member.name : '' });
+    }
   });
 
   client.on('error', (error) => {
