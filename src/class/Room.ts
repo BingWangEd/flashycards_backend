@@ -34,8 +34,17 @@ export enum ActionType {
   Close = 'close card',
   Deactivate = 'deactivate card',
   ChangeTurns = 'change turns',
-  ChangeScore = 'change score',
+  SetScores = 'set scores',
+  SetMembers = 'set members',
 }
+
+export type AllActionType =
+  | IResponseAction<ActionType.Open>
+  | IResponseAction<ActionType.Close>
+  | IResponseAction<ActionType.Deactivate>
+  | IResponseAction<ActionType.ChangeTurns>
+  | IResponseAction<ActionType.SetScores>
+  | IResponseAction<ActionType.SetMembers>;
 
 export interface ICardAction {
   type: ActionType;
@@ -50,23 +59,17 @@ export interface IMember {
   socketId: string,
 }
 
-export type IResponseAction = {
-  type: ActionType;
-  payload: IMember | number | number[];
-  player: string;
+export type IResponseAction<T extends ActionType> = {
+  type: T;
+  payload: T extends ActionType.ChangeTurns ? IMember :
+    T extends ActionType.SetScores ? Map<string, number> : 
+    T extends ActionType.SetMembers ? List<string> : number[];
+  player?: string;
   timeout?: number;
 }
 
-// export type IResponseAction<T extends ActionType> = {
-//   type: T;
-//   payload: T extends ActionType.ChangeTurns ? IMember : (
-//     T extends ActionType.IncrementScore ? string : number[]);
-//   player?: string;
-//   timeout?: number;
-// }
-
 class GameRoom {
-  private members: Map<string, IMember> = Map();
+  public members: Map<string, IMember> = Map();
   public roomState: RoomState = RoomState.Open;
   
   // All of the words that the user input to practice
@@ -74,7 +77,7 @@ class GameRoom {
   // When user chose to reset the game, create a new seed for randomization
   private seedGenerator: Generator<number>;
   // Matching card game takes 8 words => 16 cards
-  private wordNumber = 3;
+  private wordNumber = 2;
   // The 8 words selected from the wordPool
   private selectedWords: List<[string, string]> = List();
   // Flattened word list for reshuffling
@@ -95,23 +98,51 @@ class GameRoom {
   // Current number of matched pairs
   private matchedPairs: number = 0;
 
-  public addMember = (socketId: string, playerName: string, playerRole: string): void => {
+  public addMember = (socketId: string, playerName: string, playerRole: string): AllActionType[] | undefined => {
     if (this.roomState === RoomState.Open) {
-      this.members = this.members.set(socketId, {
+      const member = {
         name: playerName,
         role: playerRole,
         socketId: socketId,
-      });
-      this.scores = this.scores.set(playerName, 0);
+      };
+
+      this.members = this.members.set(socketId, member);
+
+      const setMembers: IResponseAction<ActionType.SetMembers> = {
+        type: ActionType.SetMembers,
+        payload: this.getAllMemberNames(),
+      }
+
+      return [setMembers];
     }
   }
 
-  public removeMember = (socketId: string): void => {
-    if (this.roomState === RoomState.Open) {
-      this.members = this.members.remove(socketId);
+  public removeMember = (socketId: string): AllActionType[] => {
+    const member = this.members.get(socketId);
+
+    if (!member) throw Error(`Member to remove: ${member} does not exist.`);
+
+    this.members = this.members.remove(socketId);
+    const setMembers: IResponseAction<ActionType.SetMembers> = {
+      type: ActionType.SetMembers,
+      payload: this.getAllMemberNames(),
     }
 
-    // TODO: update current player
+    if (this.members.size === 0) {
+      return [setMembers];
+    }
+
+    this.currentPlayer = this.getNextPlayer();
+
+    if (!this.currentPlayer) throw Error(`Failed to start game. No player exists in the room.`);
+
+    const changeTurn: IResponseAction<ActionType.ChangeTurns> = {
+      type: ActionType.ChangeTurns,
+      payload: this.currentPlayer,
+      player: this.currentPlayer.name,
+    }
+
+    return [changeTurn, setMembers];
   }
 
   private getNextPlayer = (): IMember | undefined => {
@@ -181,7 +212,7 @@ class GameRoom {
   public createNewGame = (wordPool: [string, string][]): {
     shuffledWords: List<WordCard>,
     cardStates: List<CardState>,
-    actions: IResponseAction[],
+    actions: AllActionType[],
   } => {
     this.wordPool = List(wordPool);
     const currentSeedNumber = this.seedGenerator.next().value;
@@ -191,25 +222,31 @@ class GameRoom {
     this.shuffledWords = this.shuffleCards(currentSeedNumber);
     this.cardStates = List(this.createInitialCardStates(this.wordNumber*2));
 
-    console.log('this.members.size: ', this.members.size);
-    console.log('this.currentPlayer: ', this.currentPlayer);
-
     if (!this.currentPlayer) throw Error(`Failed to start game. No player exists in the room.`);
 
-    const changeTurn = {
+    const changeTurn: IResponseAction<ActionType.ChangeTurns> = {
       type: ActionType.ChangeTurns,
       payload: this.currentPlayer,
       player: this.currentPlayer.name,
     }
 
+    let initialScores: { [key: string]: number} = {}
+    this.getAllMemberNames().forEach(name => initialScores[name] = 0);
+    this.scores = Map(initialScores);
+
+    const setScores: IResponseAction<ActionType.SetScores> = {
+      type: ActionType.SetScores,
+      payload: this.scores,
+    }
+
     return {
       shuffledWords: this.shuffledWords,
       cardStates: this.cardStates,
-      actions: [changeTurn],
+      actions: [changeTurn, setScores],
     }
   }
 
-  public implementGameAction = (action: ICardAction): IResponseAction[] => {
+  public implementGameAction = (action: ICardAction): AllActionType[] => {
     const { position, type, player } = action;
     const currentState = this.cardStates && this.cardStates.get(position);
     const currentCard = this.shuffledWords.get(action.position);
@@ -229,7 +266,6 @@ class GameRoom {
             isOpen: true,
           });
 
-          console.log('this.flippedCard: ', this.flippedCard);
           const openCard = {
             type,
             payload: [position],
@@ -260,7 +296,7 @@ class GameRoom {
             payload: [position],
             player,
           }
-          const deactivateCards = {
+          const deactivateCards: IResponseAction<ActionType.Deactivate> = {
             type: ActionType.Deactivate,
             payload: [this.flippedCard.position, position],
             player,
@@ -268,21 +304,21 @@ class GameRoom {
 
           // Increment matchedPairs and player score
           this.matchedPairs = this.matchedPairs + 1;
-          const currentScore = this.scores.get(player);
 
+          const currentScore = this.scores.get(player);
           if (currentScore === undefined) throw Error(`Failed to update score. Player ${player} does not exist.`)
           this.scores = this.scores.set(player, currentScore + 1);
 
           // Clean up flippedCard
           this.flippedCard = undefined;
 
-          const incrementPlayerScore = {
-            type: ActionType.ChangeScore,
-            payload: currentScore + 1,
+          const setScores: IResponseAction<ActionType.SetScores> = {
+            type: ActionType.SetScores,
+            payload: this.scores,
             player,
           }
 
-          return [openCard, deactivateCards, incrementPlayerScore];
+          return [openCard, deactivateCards, setScores];
         } else { // No match
           // Flip existing open card over
           this.cardStates = this.cardStates.set(
@@ -300,7 +336,7 @@ class GameRoom {
             player,
           }
 
-          const closeCard = {
+          const closeCard: IResponseAction<ActionType.Close> = {
             type: ActionType.Close,
             payload: [this.flippedCard.position, position],
             player,
@@ -310,7 +346,7 @@ class GameRoom {
           this.currentPlayer = this.getNextPlayer();
           if (!this.currentPlayer) throw Error('Next player does not exist. Cannot change turns');
 
-          const changeTurn = {
+          const changeTurn: IResponseAction<ActionType.ChangeTurns> = {
             type: ActionType.ChangeTurns,
             payload: this.currentPlayer,
             player: this.currentPlayer.name,

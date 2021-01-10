@@ -53,24 +53,19 @@ io.on('connection', (client: SocketIO.Socket) => {
 
   client.on('disconnecting', () => {
     console.log(`User disconnecting: ${client.id}`);
-    // try{
-    //   console.log('[socket]','leave room :', room);
-    //   io.leave(room);
-    //   io.to(room).emit('user left', client.id);
-    // }catch(e){
-    //   console.log('[error]','leave room :', e);
-    //   io.emit('error','couldnt perform requested action');
-    // }
     const clientRoom = Object.keys(client.rooms)[1];
     const room = CurrentRooms.get(clientRoom);
     if (!room) return;
     if (room.members.size === 1) {
-      CurrentRooms.delete(clientRoom);
+      CurrentRooms = CurrentRooms.delete(clientRoom);
     } else {
       const member = room.members.get(client.id);
 
-      room.removeMember(client.id);
-      client.emit(WebSocketEmissionEvent.LeftRoom, { name: member ? member.name : '' });
+      const actions = room.removeMember(client.id);
+      client.emit(WebSocketEmissionEvent.LeftRoom, {
+        name: member ? member.name : '',
+        actions,
+      });
     }
   });
 
@@ -111,14 +106,14 @@ io.on('connection', (client: SocketIO.Socket) => {
     if (io.sockets.adapter.rooms[roomCode] && room && room.roomState === RoomState.Open)
     {
       client.join(roomCode);
-      room.addMember(client.id, playerName, playerRole);
-      client.emit(WebSocketEmissionEvent.JoinRoom, { playerName });
+      const actions = room.addMember(client.id, playerName, playerRole);
 
-      const allMembers = room.getAllMemberNames();
+      if (actions === undefined) return; // don't send out signal
+      client.emit(WebSocketEmissionEvent.JoinRoom, { playerName });
 
       io.to(roomCode).emit(WebSocketEmissionEvent.GetNewMember, {
         roomCode,
-        allMembers,
+        actions,
       });
     } else {
       client.emit(WebSocketEmissionEvent.RejectRoom, { roomCode });
@@ -128,8 +123,6 @@ io.on('connection', (client: SocketIO.Socket) => {
       const room = CurrentRooms.get(roomCode);
       if (room) {
         const { shuffledWords, cardStates, actions } = room.createNewGame(words);
-
-        console.log('actions: ', actions);
 
         io.to(roomCode).emit(WebSocketEmissionEvent.StartGame, {
           shuffledWords,
