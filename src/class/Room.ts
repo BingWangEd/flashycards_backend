@@ -1,7 +1,8 @@
 import { Map, List } from 'immutable';
 import { random, shuffle, numberIncrementer } from "../utils/utils";
 
-const CLOSE_CARD_DELAY_MS = 3000;
+const CLOSE_CARD_DELAY_MS = 1500;
+const END_GAME_DEALY_MS = 1000;
 
 export enum RoomState {
   Open = 'open',
@@ -36,6 +37,7 @@ export enum ActionType {
   ChangeTurns = 'change turns',
   SetScores = 'set scores',
   SetMembers = 'set members',
+  EndGame = 'end game',
 }
 
 export type AllActionType =
@@ -44,7 +46,9 @@ export type AllActionType =
   | IResponseAction<ActionType.Deactivate>
   | IResponseAction<ActionType.ChangeTurns>
   | IResponseAction<ActionType.SetScores>
-  | IResponseAction<ActionType.SetMembers>;
+  | IResponseAction<ActionType.SetMembers>
+  | IResponseAction<ActionType.EndGame>
+;
 
 export interface ICardAction {
   type: ActionType;
@@ -62,6 +66,7 @@ export interface IMember {
 export type IResponseAction<T extends ActionType> = {
   type: T;
   payload: T extends ActionType.ChangeTurns ? IMember :
+    T extends ActionType.EndGame ? string[] :
     T extends ActionType.SetScores ? Map<string, number> : 
     T extends ActionType.SetMembers ? List<string> : number[];
   player?: string;
@@ -77,7 +82,7 @@ class GameRoom {
   // When user chose to reset the game, create a new seed for randomization
   private seedGenerator: Generator<number>;
   // Matching card game takes 8 words => 16 cards
-  private wordNumber = 2;
+  private wordNumber = 4;
   // The 8 words selected from the wordPool
   private selectedWords: List<[string, string]> = List();
   // Flattened word list for reshuffling
@@ -318,7 +323,20 @@ class GameRoom {
             player,
           }
 
-          return [openCard, deactivateCards, setScores];
+          let endGame: IResponseAction<ActionType.EndGame> | null = null;
+          if (this.matchedPairs === this.wordNumber) {
+            const maxScore = this.scores.max();
+            const winners = this.scores.filter((v) => v === maxScore).keySeq().toArray();
+
+            endGame = {
+              type: ActionType.EndGame,
+              payload: winners,
+              player,
+              timeout: END_GAME_DEALY_MS,
+            }
+          }
+
+          return endGame ? [openCard, deactivateCards, setScores, endGame] : [openCard, deactivateCards, setScores];
         } else { // No match
           // Flip existing open card over
           this.cardStates = this.cardStates.set(
