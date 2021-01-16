@@ -56,13 +56,13 @@ io.on('connection', (client: SocketIO.Socket) => {
     const clientRoom = Object.keys(client.rooms)[1];
     const room = CurrentRooms.get(clientRoom);
     if (!room) return;
-    if (room.members.size === 1) {
+
+    const member = room.members.get(client.id);
+    const actions = room.removeMember(client.id);
+    if (room.members.size === 0) {
       CurrentRooms = CurrentRooms.delete(clientRoom);
     } else {
-      const member = room.members.get(client.id);
-
-      const actions = room.removeMember(client.id);
-      client.emit(WebSocketEmissionEvent.LeftRoom, {
+      io.to(clientRoom).emit(WebSocketEmissionEvent.LeftRoom, {
         name: member ? member.name : '',
         actions,
       });

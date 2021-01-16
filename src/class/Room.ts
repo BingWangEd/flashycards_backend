@@ -82,7 +82,7 @@ class GameRoom {
   // When user chose to reset the game, create a new seed for randomization
   private seedGenerator: Generator<number>;
   // Matching card game takes 8 words => 16 cards
-  private wordNumber = 4;
+  private wordNumber = 8;
   // The 8 words selected from the wordPool
   private selectedWords: List<[string, string]> = List();
   // Flattened word list for reshuffling
@@ -122,10 +122,10 @@ class GameRoom {
     }
   }
 
-  public removeMember = (socketId: string): AllActionType[] => {
+  public removeMember = (socketId: string): AllActionType[] | undefined => {
     const member = this.members.get(socketId);
 
-    if (!member) throw Error(`Member to remove: ${member} does not exist.`);
+    if (!member) return;
 
     this.members = this.members.remove(socketId);
     const setMembers: IResponseAction<ActionType.SetMembers> = {
