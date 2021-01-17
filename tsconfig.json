@@ -1,14 +1,15 @@
 {
   "compilerOptions": {
-    "target": "es5",                          
-    "module": "commonjs",                    
-    "lib": ["es6", "es2019"],                     
-    "allowJs": true,
-    "outDir": "build",                          
-    "rootDir": "src",
-    "strict": true,         
-    "noImplicitAny": true,
+    "strict": true,
+    "moduleResolution": "node",
     "esModuleInterop": true,
-    "resolveJsonModule": true
-  }
+    "forceConsistentCasingInFileNames": true,
+    "baseUrl": "./",
+    "paths": {
+      "~*": ["./*"]
+    }
+  },
+  "include": [
+    "src/**/*.ts"
+  ]
 }
