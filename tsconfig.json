@@ -1,8 +1,8 @@
 {
   "compilerOptions": {
     "strict": true,
-    "moduleResolution": "node",
     "esModuleInterop": true,
+    "moduleResolution": "node",
     "forceConsistentCasingInFileNames": true,
     "baseUrl": "./",
     "paths": {
