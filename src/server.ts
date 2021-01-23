@@ -1,4 +1,4 @@
-import GameRoom, { RoomState, ICardAction } from "./class/Room";
+import GameRoom, { RoomState, ICardAction, ClientActionType } from "./class/Room";
 import { Map } from 'immutable';
 
 const http = require('http');
@@ -24,7 +24,7 @@ enum WebSocketEmissionEvent {
   JoinRoom = 'joined room',
   CreateNewRoom = 'created new room',
   StartGame = 'started game',
-  ReceiveAction = 'received action',
+  UpdateGameState = 'update gaem state',
   LeftRoom = 'member left room',
 }
 
@@ -139,9 +139,14 @@ io.on('connection', (client: SocketIO.Socket) => {
 
     if (!io.sockets.adapter.rooms[action.roomCode] || !room) return; // TODO: error handling
     
+    if (action.type === ClientActionType.Open) {
+      const openAction = room.openCard(action);
+      client.to(action.roomCode).emit(WebSocketEmissionEvent.UpdateGameState, openAction);
+    };
+
     const actions = room.implementGameAction(action);
 
-    io.to(action.roomCode).emit(WebSocketEmissionEvent.ReceiveAction, actions);
+    actions && io.to(action.roomCode).emit(WebSocketEmissionEvent.UpdateGameState, actions);
   });
 });
 

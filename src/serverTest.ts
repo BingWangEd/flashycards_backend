@@ -1,4 +1,4 @@
-import GameRoom, { ActionType } from "./class/Room";
+import GameRoom, { ClientActionType } from "./class/Room";
 
 const http = require('http');
 
@@ -23,7 +23,7 @@ server.listen(PORT, (error: Error) => {
   }
 
   const result1 = gameRoom.implementGameAction({
-    type: ActionType.Open,
+    type: ClientActionType.Open,
     position: 0,
     player: 'bee',
     roomCode: 'aaa',
@@ -32,7 +32,7 @@ server.listen(PORT, (error: Error) => {
   // printGameStates();
 
   const result2 = gameRoom.implementGameAction({
-    type: ActionType.Open,
+    type: ClientActionType.Open,
     position: 5,
     player: 'bee',
     roomCode: 'aaa',
@@ -41,7 +41,7 @@ server.listen(PORT, (error: Error) => {
   // printGameStates();
 
   const result3 = gameRoom.implementGameAction({
-    type: ActionType.Open,
+    type: ClientActionType.Open,
     position: 1,
     player: 'bing',
     roomCode: 'aaa',
@@ -50,7 +50,7 @@ server.listen(PORT, (error: Error) => {
   // printGameStates();
 
   const result4 = gameRoom.implementGameAction({
-    type: ActionType.Open,
+    type: ClientActionType.Open,
     position: 3,
     player: 'bing',
     roomCode: 'aaa',
@@ -59,7 +59,7 @@ server.listen(PORT, (error: Error) => {
   // printGameStates();
 
   const result5 = gameRoom.implementGameAction({
-    type: ActionType.Open,
+    type: ClientActionType.Open,
     position: 0,
     player: 'bee',
     roomCode: 'aaa',
@@ -68,7 +68,7 @@ server.listen(PORT, (error: Error) => {
   printGameStates();
 
   const result6 = gameRoom.implementGameAction({
-    type: ActionType.Open,
+    type: ClientActionType.Open,
     position: 5,
     player: 'bee',
     roomCode: 'aaa',

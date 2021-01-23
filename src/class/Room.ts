@@ -1,7 +1,7 @@
 import { Map, List } from 'immutable';
 import { random, shuffle, numberIncrementer } from "../utils/utils";
 
-const CLOSE_CARD_DELAY_MS = 1500;
+const CLOSE_CARD_DELAY_MS = 1000;
 const END_GAME_DEALY_MS = 1000;
 
 export enum RoomState {
@@ -30,28 +30,28 @@ const initialCardState = {
   isOpen: false,
 }
 
-export enum ActionType {
-  Open = 'open card',
-  Close = 'close card',
-  Deactivate = 'deactivate card',
+export enum ServerActionType {
+  UpdateCardStates = 'update card states',
   ChangeTurns = 'change turns',
   SetScores = 'set scores',
   SetMembers = 'set members',
   EndGame = 'end game',
 }
 
-export type AllActionType =
-  | IResponseAction<ActionType.Open>
-  | IResponseAction<ActionType.Close>
-  | IResponseAction<ActionType.Deactivate>
-  | IResponseAction<ActionType.ChangeTurns>
-  | IResponseAction<ActionType.SetScores>
-  | IResponseAction<ActionType.SetMembers>
-  | IResponseAction<ActionType.EndGame>
+export type AllServerActionType =
+  | IResponseAction<ServerActionType.UpdateCardStates>
+  | IResponseAction<ServerActionType.ChangeTurns>
+  | IResponseAction<ServerActionType.SetScores>
+  | IResponseAction<ServerActionType.SetMembers>
+  | IResponseAction<ServerActionType.EndGame>
 ;
 
+export enum ClientActionType {
+  Open = 'open',
+}
+
 export interface ICardAction {
-  type: ActionType;
+  type: ClientActionType;
   position: number;
   player: string;
   roomCode: string;
@@ -63,12 +63,13 @@ export interface IMember {
   socketId: string,
 }
 
-export type IResponseAction<T extends ActionType> = {
+export type IResponseAction<T extends ServerActionType> = {
   type: T;
-  payload: T extends ActionType.ChangeTurns ? IMember :
-    T extends ActionType.EndGame ? string[] :
-    T extends ActionType.SetScores ? Map<string, number> : 
-    T extends ActionType.SetMembers ? List<string> : number[];
+  payload: T extends ServerActionType.ChangeTurns ? IMember :
+    T extends ServerActionType.EndGame ? string[] :
+    T extends ServerActionType.SetScores ? Map<string, number> : 
+    T extends ServerActionType.SetMembers ? List<string> :
+    List<CardState>; // when ActionType is `UpdateCardStates`, return cardStates directly
   player?: string;
   timeout?: number;
 }
@@ -99,11 +100,11 @@ class GameRoom {
   // Current player's turn
   public currentPlayer: IMember | undefined;
   // Current opened card. Undefined means no card is open
-  private flippedCard: (WordCard & { position: number }) | undefined;
+  public flippedCard: (WordCard & { position: number }) | undefined;
   // Current number of matched pairs
   private matchedPairs: number = 0;
 
-  public addMember = (socketId: string, playerName: string, playerRole: string): AllActionType[] | undefined => {
+  public addMember = (socketId: string, playerName: string, playerRole: string): AllServerActionType[] | undefined => {
     if (this.roomState === RoomState.Open) {
       const member = {
         name: playerName,
@@ -113,8 +114,8 @@ class GameRoom {
 
       this.members = this.members.set(socketId, member);
 
-      const setMembers: IResponseAction<ActionType.SetMembers> = {
-        type: ActionType.SetMembers,
+      const setMembers: IResponseAction<ServerActionType.SetMembers> = {
+        type: ServerActionType.SetMembers,
         payload: this.getAllMemberNames(),
       }
 
@@ -122,14 +123,14 @@ class GameRoom {
     }
   }
 
-  public removeMember = (socketId: string): AllActionType[] | undefined => {
+  public removeMember = (socketId: string): AllServerActionType[] | undefined => {
     const member = this.members.get(socketId);
 
     if (!member) return;
 
     this.members = this.members.remove(socketId);
-    const setMembers: IResponseAction<ActionType.SetMembers> = {
-      type: ActionType.SetMembers,
+    const setMembers: IResponseAction<ServerActionType.SetMembers> = {
+      type: ServerActionType.SetMembers,
       payload: this.getAllMemberNames(),
     }
 
@@ -141,8 +142,8 @@ class GameRoom {
 
     if (!this.currentPlayer) throw Error(`Failed to start game. No player exists in the room.`);
 
-    const changeTurn: IResponseAction<ActionType.ChangeTurns> = {
-      type: ActionType.ChangeTurns,
+    const changeTurn: IResponseAction<ServerActionType.ChangeTurns> = {
+      type: ServerActionType.ChangeTurns,
       payload: this.currentPlayer,
       player: this.currentPlayer.name,
     }
@@ -217,7 +218,7 @@ class GameRoom {
   public createNewGame = (wordPool: [string, string][]): {
     shuffledWords: List<WordCard>,
     cardStates: List<CardState>,
-    actions: AllActionType[],
+    actions: AllServerActionType[],
   } => {
     this.wordPool = List(wordPool);
     const currentSeedNumber = this.seedGenerator.next().value;
@@ -229,8 +230,8 @@ class GameRoom {
 
     if (!this.currentPlayer) throw Error(`Failed to start game. No player exists in the room.`);
 
-    const changeTurn: IResponseAction<ActionType.ChangeTurns> = {
-      type: ActionType.ChangeTurns,
+    const changeTurn: IResponseAction<ServerActionType.ChangeTurns> = {
+      type: ServerActionType.ChangeTurns,
       payload: this.currentPlayer,
       player: this.currentPlayer.name,
     }
@@ -239,8 +240,8 @@ class GameRoom {
     this.getAllMemberNames().forEach(name => initialScores[name] = 0);
     this.scores = Map(initialScores);
 
-    const setScores: IResponseAction<ActionType.SetScores> = {
-      type: ActionType.SetScores,
+    const setScores: IResponseAction<ServerActionType.SetScores> = {
+      type: ServerActionType.SetScores,
       payload: this.scores,
     }
 
@@ -251,7 +252,27 @@ class GameRoom {
     }
   }
 
-  public implementGameAction = (action: ICardAction): AllActionType[] => {
+  public openCard = (action: ICardAction): [IResponseAction<ServerActionType.UpdateCardStates>]=> {
+    const { position, player } = action;
+    const currentCard = this.shuffledWords.get(action.position);
+    if (action.type !== ClientActionType.Open) throw Error(`Error: trying to open card ${action.position} when card action is not matched.`);
+
+    if (!currentCard) throw Error(`Error: card ${action.position} does not exist.`);
+
+    this.cardStates = this.cardStates.set(position, {
+      isActive: true,
+      isOpen: true,
+    });
+
+    const openCard: IResponseAction<ServerActionType.UpdateCardStates> = {
+      type: ServerActionType.UpdateCardStates,
+      payload: this.cardStates,
+      player,
+    };
+    return [openCard];
+  }
+
+  public implementGameAction = (action: ICardAction): AllServerActionType[] | undefined => {
     const { position, type, player } = action;
     const currentState = this.cardStates && this.cardStates.get(position);
     const currentCard = this.shuffledWords.get(action.position);
@@ -259,25 +280,14 @@ class GameRoom {
     if (!this.cardStates || !currentState || !currentState.isActive || !currentCard) throw Error('Card does not exist');
 
     switch (type) {
-      case ActionType.Open:
-        if (!this.flippedCard) { 
+      case ClientActionType.Open:
+        if (!this.flippedCard) {
           this.flippedCard = { 
             position,
             ...currentCard
           };
-
-          this.cardStates = this.cardStates.set(position, {
-            isActive: true,
-            isOpen: true,
-          });
-
-          const openCard = {
-            type,
-            payload: [position],
-            player,
-          };
-          return [openCard];
-        }
+          return;
+        }; // Open action already sent
 
         // Two flipped cards match
         if (this.flippedCard.counterpart === currentCard.word) {
@@ -295,15 +305,9 @@ class GameRoom {
             }
           );
 
-          // Define two actions for front-end
-          const openCard = {
-            type,
-            payload: [position],
-            player,
-          }
-          const deactivateCards: IResponseAction<ActionType.Deactivate> = {
-            type: ActionType.Deactivate,
-            payload: [this.flippedCard.position, position],
+          const deactivateCard: IResponseAction<ServerActionType.UpdateCardStates> = {
+            type: ServerActionType.UpdateCardStates,
+            payload: this.cardStates,
             player,
           }
 
@@ -317,26 +321,26 @@ class GameRoom {
           // Clean up flippedCard
           this.flippedCard = undefined;
 
-          const setScores: IResponseAction<ActionType.SetScores> = {
-            type: ActionType.SetScores,
+          const setScores: IResponseAction<ServerActionType.SetScores> = {
+            type: ServerActionType.SetScores,
             payload: this.scores,
             player,
           }
 
-          let endGame: IResponseAction<ActionType.EndGame> | null = null;
+          let endGame: IResponseAction<ServerActionType.EndGame> | null = null;
           if (this.matchedPairs === this.wordNumber) {
             const maxScore = this.scores.max();
             const winners = this.scores.filter((v) => v === maxScore).keySeq().toArray();
 
             endGame = {
-              type: ActionType.EndGame,
+              type: ServerActionType.EndGame,
               payload: winners,
               player,
               timeout: END_GAME_DEALY_MS,
-            }
+            };
           }
 
-          return endGame ? [openCard, deactivateCards, setScores, endGame] : [openCard, deactivateCards, setScores];
+          return endGame ? [deactivateCard, setScores, endGame] : [deactivateCard, setScores];
         } else { // No match
           // Flip existing open card over
           this.cardStates = this.cardStates.set(
@@ -347,16 +351,17 @@ class GameRoom {
             }
           );
 
-          // Define two actions for front-end
-          const openCard = {
-            type,
-            payload: [position],
-            player,
-          }
+          this.cardStates = this.cardStates.set(
+            position,
+            {
+              isActive: true,
+              isOpen: false,
+            }
+          );
 
-          const closeCard: IResponseAction<ActionType.Close> = {
-            type: ActionType.Close,
-            payload: [this.flippedCard.position, position],
+          const closeCards: IResponseAction<ServerActionType.UpdateCardStates> = {
+            type: ServerActionType.UpdateCardStates,
+            payload: this.cardStates,
             player,
             timeout: CLOSE_CARD_DELAY_MS,
           }
@@ -364,8 +369,8 @@ class GameRoom {
           this.currentPlayer = this.getNextPlayer();
           if (!this.currentPlayer) throw Error('Next player does not exist. Cannot change turns');
 
-          const changeTurn: IResponseAction<ActionType.ChangeTurns> = {
-            type: ActionType.ChangeTurns,
+          const changeTurn: IResponseAction<ServerActionType.ChangeTurns> = {
+            type: ServerActionType.ChangeTurns,
             payload: this.currentPlayer,
             player: this.currentPlayer.name,
           }
@@ -373,7 +378,7 @@ class GameRoom {
           // Clean up flippedCard
           this.flippedCard = undefined;
 
-          return [openCard, closeCard, changeTurn];
+          return [closeCards, changeTurn];
         }
 
       default:
