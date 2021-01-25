@@ -1,5 +1,6 @@
-import GameRoom, { RoomState, ICardAction, ClientActionType } from "./class/Room";
 import { Map } from 'immutable';
+import MatchCardSession from "./class/MatchCardSession";
+import { RoomState, ICardAction, ClientActionType } from './class/CardSession';
 
 const http = require('http');
 const socketIO = require('socket.io');
@@ -31,7 +32,7 @@ enum WebSocketEmissionEvent {
 const PORT = process.env.PORT;
 console.log(`Port: ${PORT}`);
 
-let CurrentRooms = Map<string, GameRoom>();
+let CurrentRooms = Map<string, MatchCardSession>();
 
 const RoomNames = ['Apple', 'Watermelon', 'Orange', 'Strawberry', 'Grape', 'Blueberry', 'Lychee', 'Pear', 'Banana', 'Tangerine'];
 
@@ -86,7 +87,7 @@ io.on('connection', (client: SocketIO.Socket) => {
 
     if (selectedRoom) {
       client.join(selectedRoom);
-      CurrentRooms = CurrentRooms.set(selectedRoom, new GameRoom(1));
+      CurrentRooms = CurrentRooms.set(selectedRoom, new MatchCardSession(1, 8));
       client.emit(WebSocketEmissionEvent.CreateNewRoom, { roomCode: selectedRoom });
     }
   });
@@ -142,7 +143,7 @@ io.on('connection', (client: SocketIO.Socket) => {
     if (action.type === ClientActionType.Open) {
       const openAction = room.openCard(action);
       client.to(action.roomCode).emit(WebSocketEmissionEvent.UpdateGameState, openAction);
-    };
+    }
 
     const actions = room.implementGameAction(action);
 
