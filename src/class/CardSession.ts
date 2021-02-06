@@ -15,7 +15,7 @@ export enum ClientActionType {
   Open = 'open',
 }
 
-enum CardSide {
+export enum CardSide {
   Word = 'word',
   Translation = 'translation'
 }
@@ -78,11 +78,6 @@ class CardSession {
   
   // The 8 words selected from the wordPool
   public selectedWords: List<[string, string]> = List();
-  // Flattened word list for reshuffling
-  public shuffledWords: List<WordCard> = List();
-
-  // Score boards
-  public scores: Map<string, number> = Map();
 
   public members: Map<string, IMember> = Map();
   // Current player's turn
@@ -155,35 +150,15 @@ class CardSession {
 
   public getAllMemberNames = (): List<string> => List(this.members.values()).map((member => member.name));
 
-  public shuffleCards = (seedNumber: number, wordNumber: number): List<WordCard> => {
-    const arrayInOrder = Array.from(Array(wordNumber * 2).keys());
+  public shuffleCards = <T>(seedNumber: number, selectedWords: List<T>): List<T> => {
+    const arrayInOrder = Array.from(Array(selectedWords.size).keys());
     const arrayShuffled = shuffle(arrayInOrder, seedNumber);
-    const result: WordCard[] = new Array(wordNumber * 2);
-
-    let selectedWords: string[] = [];
-    this.selectedWords.forEach((wordPair) => {
-      selectedWords = selectedWords.concat(wordPair);
-    });
+    const result: T[] = new Array(selectedWords.size);
 
     arrayShuffled.forEach((newPosition, currentPosition) => {
-      let word: WordCard;
-      if (currentPosition % 2 === 0) {
-        word = {
-          word: selectedWords[currentPosition],
-          side: CardSide.Word,
-          counterpart: selectedWords[currentPosition+1],
-        }
-      } else {
-        word = {
-          word: selectedWords[currentPosition],
-          side: CardSide.Translation,
-          counterpart: selectedWords[currentPosition-1],
-        }
-      }
-      
-      result[newPosition] = word;
+      const value = selectedWords.get(currentPosition)
+      if (value) result[newPosition] = value;
     });
-
     return List(result);
   }
 
@@ -198,12 +173,8 @@ class CardSession {
 
     return List(slicedWords);
   }
-
-  public printCurrentWordsAndOrder = (): void => {
-    console.log('Current words: ', this.shuffledWords);
-  }
   
-  public createInitialMatchCardStates = (wordNumber: number, initialCardState: CardState): CardState[] => Array(wordNumber*2).fill(initialCardState);
+  public createInitialMatchCardStates = (wordNumber: number, initialCardState: CardState): List<CardState> => List(Array(wordNumber*2).fill(initialCardState));
 }
 
 export default CardSession;

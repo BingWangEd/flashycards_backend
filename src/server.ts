@@ -1,6 +1,7 @@
 import { Map } from 'immutable';
 import MatchCardSession from "./class/MatchCardSession";
 import { RoomState, ICardAction, ClientActionType } from './class/CardSession';
+import FreeCardSession, { ICardLayoutRules } from './class/FreeCardSession';
 
 const http = require('http');
 const socketIO = require('socket.io');
@@ -14,6 +15,7 @@ export enum WebSocketEvent {
   EnterRoom = 'enter room',
   SubmitName = 'submit name',
   SetWords = 'set words',
+  ConfirmCardsLayout = 'confirm cards layout',
   SendAction = 'send action',
 }
 
@@ -24,15 +26,21 @@ enum WebSocketEmissionEvent {
   RejectRoom = 'rejected room exists',
   JoinRoom = 'joined room',
   CreateNewRoom = 'created new room',
+  ReadyToSetLayout = 'ready to set layout',
   StartGame = 'started game',
   UpdateGameState = 'update gaem state',
   LeftRoom = 'member left room',
 }
 
+enum Mode {
+  Free = 'free',
+  Game = 'game',
+}
+
 const PORT = process.env.PORT;
 console.log(`Port: ${PORT}`);
 
-let CurrentRooms = Map<string, MatchCardSession>();
+let CurrentRooms = Map<string, MatchCardSession | FreeCardSession>();
 
 const RoomNames = ['Apple', 'Watermelon', 'Orange', 'Strawberry', 'Grape', 'Blueberry', 'Lychee', 'Pear', 'Banana', 'Tangerine'];
 
@@ -74,7 +82,7 @@ io.on('connection', (client: SocketIO.Socket) => {
     console.log(error);
   });
 
-  client.on(WebSocketEvent.CreateRoom, () => {
+  client.on(WebSocketEvent.CreateRoom, ({ mode }: { mode: Mode}) => {
     let selectedRoom = null;
 
     // TODO: create a system to ensure infinite number of rooms can be created
@@ -87,7 +95,7 @@ io.on('connection', (client: SocketIO.Socket) => {
 
     if (selectedRoom) {
       client.join(selectedRoom);
-      CurrentRooms = CurrentRooms.set(selectedRoom, new MatchCardSession(1, 8));
+      CurrentRooms = CurrentRooms.set(selectedRoom, mode === Mode.Game ? new MatchCardSession(1, 8) : new FreeCardSession(1, 8));
       client.emit(WebSocketEmissionEvent.CreateNewRoom, { roomCode: selectedRoom });
     }
   });
@@ -119,19 +127,21 @@ io.on('connection', (client: SocketIO.Socket) => {
     } else {
       client.emit(WebSocketEmissionEvent.RejectRoom, { roomCode });
     }
+  });
 
-    client.on(WebSocketEvent.SetWords, ({ words, roomCode }: { words: [string, string][], roomCode: string }) => {
-      const room = CurrentRooms.get(roomCode);
-      if (room) {
-        const { shuffledWords, cardStates, actions } = room.createNewGame(words);
+  client.on(WebSocketEvent.SetWords, ({ words, roomCode }: { words: [string, string][], roomCode: string }) => {
+    const room = CurrentRooms.get(roomCode);
+    if (!io.sockets.adapter.rooms[roomCode] || !room) throw Error(`${roomCode} does not exist`);
+    
+    if (room) {
+      const gameSetup = room.createNewGame(words);
 
-        io.to(roomCode).emit(WebSocketEmissionEvent.StartGame, {
-          shuffledWords,
-          cardStates,
-          actions,
-        });
+      if (room instanceof MatchCardSession) {
+        io.to(roomCode).emit(WebSocketEmissionEvent.StartGame, gameSetup);
+      } else {
+        io.to(roomCode).emit(WebSocketEmissionEvent.ReadyToSetLayout);
       }
-    });
+    }
   });
 
   client.on(WebSocketEvent.SendAction, (action: ICardAction) => {
@@ -148,6 +158,21 @@ io.on('connection', (client: SocketIO.Socket) => {
     const actions = room.implementGameAction(action);
 
     actions && io.to(action.roomCode).emit(WebSocketEmissionEvent.UpdateGameState, actions);
+  });
+
+  client.on(WebSocketEvent.ConfirmCardsLayout, ({ roomCode, layoutRules, groupWordsBySet }: {
+    words: [string, string][],
+    layoutRules: ICardLayoutRules[], 
+    roomCode: string,
+    groupWordsBySet: boolean,
+  }) => {
+    const room = CurrentRooms.get(roomCode);
+    if (!io.sockets.adapter.rooms[roomCode] || !room) throw Error(`${roomCode} does not exist`); // TODO: more elegant error handling 
+
+    if (!(room instanceof FreeCardSession)) throw Error(`Expecting ${roomCode} to be a FreeCardGame room, but it's a ${room.constructor.name} room`);
+
+    const gameSetup = room.createInitialCardStates(layoutRules, groupWordsBySet);
+    io.to(roomCode).emit(WebSocketEmissionEvent.StartGame, gameSetup);
   });
 });
 

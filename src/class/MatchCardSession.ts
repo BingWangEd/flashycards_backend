@@ -1,4 +1,4 @@
-import CardSession, { WordCard, AllServerActionType, IResponseAction, ServerActionType, MatchCardState, ICardAction, ClientActionType } from './CardSession';
+import CardSession, { WordCard, AllServerActionType, IResponseAction, ServerActionType, MatchCardState, ICardAction, ClientActionType, CardSide } from './CardSession';
 import { Map, List } from 'immutable';
 
 const CLOSE_CARD_DELAY_MS = 1000;
@@ -10,6 +10,8 @@ const initialCardState = {
 }
 
 class MatchCardSession extends CardSession {
+  // Flattened card list for reshuffling
+  public shuffledCards: List<WordCard> = List();
   // Current state of each card
   public cardStates: List<MatchCardState> = List();
   // Current opened card. Undefined means no card is open
@@ -18,6 +20,8 @@ class MatchCardSession extends CardSession {
   private matchedPairs = 0;
   // Matching card game takes 8 words => 16 cards
   private wordNumber = 8;
+  // Score boards
+  public scores: Map<string, number> = Map();
 
   constructor(seedNumber: number, wordNumber: number) {
     super(seedNumber);
@@ -25,7 +29,7 @@ class MatchCardSession extends CardSession {
   }
   
   public createNewGame = (wordPool: [string, string][]): {
-    shuffledWords: List<WordCard>,
+    shuffledCards: List<WordCard>,
     cardStates: List<MatchCardState>,
     actions: AllServerActionType[],
   } => {
@@ -34,8 +38,24 @@ class MatchCardSession extends CardSession {
     this.currentPlayer = this.getNextPlayer();
 
     this.selectedWords = this.sampleCards(currentSeedNumber, this.wordNumber);
-    this.shuffledWords = this.shuffleCards(currentSeedNumber, this.wordNumber);
-    this.cardStates = List(this.createInitialMatchCardStates(this.wordNumber, initialCardState));
+
+    let wordList: WordCard[] = [];
+    this.selectedWords.forEach(([word, translation]) => {
+      const word1 = {
+        word,
+        side: CardSide.Word,
+        counterpart: translation,
+      };
+      const word2 = {
+        word: translation,
+        side: CardSide.Translation,
+        counterpart: word,
+      }
+      wordList = wordList.concat([word1, word2]);
+    });
+
+    this.shuffledCards = this.shuffleCards(currentSeedNumber, List(wordList));
+    this.cardStates = this.createInitialMatchCardStates(this.wordNumber, initialCardState);
 
     if (!this.currentPlayer) throw Error(`Failed to start game. No player exists in the room.`);
 
@@ -55,7 +75,7 @@ class MatchCardSession extends CardSession {
     }
 
     return {
-      shuffledWords: this.shuffledWords,
+      shuffledCards: this.shuffledCards,
       cardStates: this.cardStates,
       actions: [changeTurn, setScores],
     }
@@ -63,7 +83,7 @@ class MatchCardSession extends CardSession {
 
   public openCard = (action: ICardAction): [IResponseAction<ServerActionType.UpdateCardStates>]=> {
     const { position, player } = action;
-    const currentCard = this.shuffledWords.get(action.position);
+    const currentCard = this.shuffledCards.get(action.position);
     if (action.type !== ClientActionType.Open) throw Error(`Error: trying to open card ${action.position} when card action is not matched.`);
 
     if (!currentCard) throw Error(`Error: card ${action.position} does not exist.`);
@@ -84,7 +104,7 @@ class MatchCardSession extends CardSession {
   public implementGameAction = (action: ICardAction): AllServerActionType[] | undefined => {
     const { position, type, player } = action;
     const currentState = this.cardStates && this.cardStates.get(position);
-    const currentCard = this.shuffledWords.get(action.position);
+    const currentCard = this.shuffledCards.get(action.position);
 
     if (!this.cardStates || !currentState || !currentState.isActive || !currentCard) throw Error('Card does not exist');
 
