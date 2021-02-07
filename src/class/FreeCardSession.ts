@@ -1,18 +1,12 @@
-import CardSession, { WordCard, AllServerActionType, IResponseAction, ServerActionType, MatchCardState, ICardAction, ClientActionType } from './CardSession';
-import { Map, List } from 'immutable';
+import CardSession, { AllServerActionType, IResponseAction, ServerActionType, ICardAction, ClientActionType } from './CardSession';
+import { List } from 'immutable';
+import { Mode } from '~src/server';
 
-const CLOSE_CARD_DELAY_MS = 1000;
-const END_GAME_DEALY_MS = 1000;
 const CARD_WIDTH = 150;
 const CARD_HEIGHT = 150;
 const MARGIN_PX = 20;
 const SET_SPACE_PX = 20;
 const SET_PER_ROW = 2;
-
-const initialCardState = {
-  isActive: true,
-  isOpen: false,
-}
 
 export enum Content {
   Word = 'word',
@@ -21,7 +15,7 @@ export enum Content {
 }
 
 export interface IFreeCardState {
-  id: number;
+  // id: number;
   isFaceUp?: boolean;
   isActive?: boolean;
   position: {
@@ -43,11 +37,11 @@ export interface ICardLayoutRules {
   isRandomized: boolean;
 }
 
-class FreeCardSession extends CardSession {
+class FreeCardSession extends CardSession<Mode.Free> {
   // Flattened card list for reshuffling
   public shuffledCards: List<IFreeCard> = List();
   // Current state of each card
-  public cardStates: List<MatchCardState> = List();
+  public cardStates: List<IFreeCardState> = List();
   // Matching card game takes 8 words => 16 cards
   private wordNumber = 8;
 
@@ -56,20 +50,12 @@ class FreeCardSession extends CardSession {
     this.wordNumber = wordNumber;
   }
   
-  public createNewGame = (wordPool: [string, string][]): {
-    cardStates: List<MatchCardState>,
-    actions: AllServerActionType[],
-  } => {
+  public createNewGame = (wordPool: [string, string][]): void => {
     this.wordPool = List(wordPool);
     const currentSeedNumber = this.seedGenerator.next().value;
     this.currentPlayer = this.getNextPlayer();
     
     this.selectedWords = this.sampleCards(currentSeedNumber, this.wordNumber);
-
-    return {
-      cardStates: this.cardStates,
-      actions: [],
-    }
   }
 
   private getPositions = (overallSetNumber: number, setIndex: number, wordIndex: number, groupWordsBySet: boolean) => {
@@ -100,7 +86,7 @@ class FreeCardSession extends CardSession {
   public createInitialCardStates = (layoutRules: ICardLayoutRules[], groupWordsBySet: boolean): {
     shuffledCards: List<IFreeCard>
     cardStates: List<IFreeCardState>,
-    actions: AllServerActionType[],
+    actions: AllServerActionType<Mode.Free>[],
   } => {
     let finalCards: List<IFreeCard> = List([]);
     let finalCardStates: List<IFreeCardState> = List([]);
@@ -131,6 +117,9 @@ class FreeCardSession extends CardSession {
       finalCardStates = finalCardStates.concat(cardStates);
     });
 
+    this.shuffledCards = finalCards;
+    this.cardStates = finalCardStates;
+
     return {
       shuffledCards: finalCards,
       cardStates: finalCardStates,
@@ -138,27 +127,32 @@ class FreeCardSession extends CardSession {
     }
   }
 
-  public openCard = (action: ICardAction): [IResponseAction<ServerActionType.UpdateCardStates>]=> {
+  public openCard = (action: ICardAction): [IResponseAction<ServerActionType.UpdateCardStates, Mode.Free>]=> {
     const { position, player } = action;
-    const currentCard = this.shuffledCards.get(action.position);
+    const currentCard = this.shuffledCards.get(position);
     if (action.type !== ClientActionType.Open) throw Error(`Error: trying to open card ${action.position} when card action is not matched.`);
 
     if (!currentCard) throw Error(`Error: card ${action.position} does not exist.`);
 
+    const currentCardState = this.cardStates.get(position);
+    if (!currentCardState) throw Error('Error: card ' + position + ' does not exist.');
     this.cardStates = this.cardStates.set(position, {
-      isActive: true,
-      isOpen: true,
+      ...currentCardState,
+      isFaceUp: !currentCardState.isFaceUp,
     });
 
-    const openCard: IResponseAction<ServerActionType.UpdateCardStates> = {
+    const openCard: IResponseAction<ServerActionType.UpdateCardStates, Mode.Free> = {
       type: ServerActionType.UpdateCardStates,
       payload: this.cardStates,
       player,
     };
+
     return [openCard];
   }
 
-  public implementGameAction = () => {};
+  public implementGameAction = (): void => {
+    console.log('free card mode implementGameAction');
+  };
 }
 
 export default FreeCardSession;

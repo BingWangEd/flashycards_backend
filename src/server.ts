@@ -32,7 +32,7 @@ enum WebSocketEmissionEvent {
   LeftRoom = 'member left room',
 }
 
-enum Mode {
+export enum Mode {
   Free = 'free',
   Game = 'game',
 }

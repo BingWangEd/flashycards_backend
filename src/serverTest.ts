@@ -15,7 +15,7 @@
 //   gameRoom.createNewGame([['apple', 'リンゴ'], ['pear', '桃'], ['strawberry', 'イチゴ'], ['banana', 'バナナ']]);
 
 //   const printGameStates = () => {
-//     console.log('cards: ', gameRoom.shuffledWords.forEach((word, i) => console.log(`${i}: ${word.word}`)));
+//     console.log('cards: ', gameRoom.shuffledCards.forEach((word, i) => console.log(`${i}: ${word.word}`)));
 
 //     console.log('card states: ', gameRoom.cardStates.forEach((state, i) => console.log(`${i}: isActive - ${state.isActive}; isOpen - ${state.isOpen}`)));
 //     console.log(`Game score: `, gameRoom.scores);

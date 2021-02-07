@@ -1,5 +1,7 @@
 import { Map, List } from 'immutable';
 import { random, shuffle, numberIncrementer } from "../utils/utils";
+import { IFreeCardState } from './FreeCardSession';
+import { Mode } from '~src/server';
 
 export enum RoomState {
   Open = 'open',
@@ -34,12 +36,12 @@ export enum ServerActionType {
   EndGame = 'end game',
 }
 
-export type AllServerActionType =
-  | IResponseAction<ServerActionType.UpdateCardStates>
-  | IResponseAction<ServerActionType.ChangeTurns>
-  | IResponseAction<ServerActionType.SetScores>
-  | IResponseAction<ServerActionType.SetMembers>
-  | IResponseAction<ServerActionType.EndGame>
+export type AllServerActionType<M extends Mode> =
+  | IResponseAction<ServerActionType.UpdateCardStates, M>
+  | IResponseAction<ServerActionType.ChangeTurns, M>
+  | IResponseAction<ServerActionType.SetScores, M>
+  | IResponseAction<ServerActionType.SetMembers, M>
+  | IResponseAction<ServerActionType.EndGame, M>
 ;
 
 export interface IMember {
@@ -55,20 +57,20 @@ export interface ICardAction {
   roomCode: string;
 }
 
-type CardState = MatchCardState;
+export type CardState<M extends Mode> = M extends Mode.Game ? MatchCardState : IFreeCardState;
 
-export type IResponseAction<T extends ServerActionType> = {
+export type IResponseAction<T extends ServerActionType, M extends Mode> = {
   type: T;
   payload: T extends ServerActionType.ChangeTurns ? IMember :
     T extends ServerActionType.EndGame ? string[] :
     T extends ServerActionType.SetScores ? Map<string, number> : 
     T extends ServerActionType.SetMembers ? List<string> :
-    List<CardState>; // when ActionType is `UpdateCardStates`, return cardStates directly
+    List<CardState<M>>; // when ActionType is `UpdateCardStates`, return cardStates directly
   player?: string;
   timeout?: number;
 }
 
-class CardSession {
+class CardSession<M extends Mode> {
   // All of the words that the user input to practice
   public wordPool: List<[string, string]> = List();
 
@@ -89,7 +91,7 @@ class CardSession {
 
   public getSeed = (): number => this.seedGenerator.next().value;
 
-  public addMember = (socketId: string, playerName: string, playerRole: string): AllServerActionType[] | undefined => {
+  public addMember = (socketId: string, playerName: string, playerRole: string): AllServerActionType<M>[] | undefined => {
     if (this.roomState === RoomState.Open) {
       const member = {
         name: playerName,
@@ -99,7 +101,7 @@ class CardSession {
 
       this.members = this.members.set(socketId, member);
 
-      const setMembers: IResponseAction<ServerActionType.SetMembers> = {
+      const setMembers: IResponseAction<ServerActionType.SetMembers, M> = {
         type: ServerActionType.SetMembers,
         payload: this.getAllMemberNames(),
       }
@@ -108,13 +110,13 @@ class CardSession {
     }
   }
 
-  public removeMember = (socketId: string): AllServerActionType[] | undefined => {
+  public removeMember = (socketId: string): AllServerActionType<M>[] | undefined => {
     const member = this.members.get(socketId);
 
     if (!member) return;
 
     this.members = this.members.remove(socketId);
-    const setMembers: IResponseAction<ServerActionType.SetMembers> = {
+    const setMembers: IResponseAction<ServerActionType.SetMembers, M> = {
       type: ServerActionType.SetMembers,
       payload: this.getAllMemberNames(),
     }
@@ -127,7 +129,7 @@ class CardSession {
 
     if (!this.currentPlayer) throw Error(`Failed to start game. No player exists in the room.`);
 
-    const changeTurn: IResponseAction<ServerActionType.ChangeTurns> = {
+    const changeTurn: IResponseAction<ServerActionType.ChangeTurns, M> = {
       type: ServerActionType.ChangeTurns,
       payload: this.currentPlayer,
       player: this.currentPlayer.name,
@@ -173,8 +175,6 @@ class CardSession {
 
     return List(slicedWords);
   }
-  
-  public createInitialMatchCardStates = (wordNumber: number, initialCardState: CardState): List<CardState> => List(Array(wordNumber*2).fill(initialCardState));
 }
 
 export default CardSession;

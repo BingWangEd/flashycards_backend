@@ -1,5 +1,6 @@
-import CardSession, { WordCard, AllServerActionType, IResponseAction, ServerActionType, MatchCardState, ICardAction, ClientActionType, CardSide } from './CardSession';
+import CardSession, { WordCard, AllServerActionType, IResponseAction, ServerActionType, MatchCardState, ICardAction, ClientActionType, CardSide, CardState } from './CardSession';
 import { Map, List } from 'immutable';
+import { Mode } from '~src/server';
 
 const CLOSE_CARD_DELAY_MS = 1000;
 const END_GAME_DEALY_MS = 1000;
@@ -9,7 +10,7 @@ const initialCardState = {
   isOpen: false,
 }
 
-class MatchCardSession extends CardSession {
+class MatchCardSession extends CardSession<Mode.Game> {
   // Flattened card list for reshuffling
   public shuffledCards: List<WordCard> = List();
   // Current state of each card
@@ -31,7 +32,7 @@ class MatchCardSession extends CardSession {
   public createNewGame = (wordPool: [string, string][]): {
     shuffledCards: List<WordCard>,
     cardStates: List<MatchCardState>,
-    actions: AllServerActionType[],
+    actions: AllServerActionType<Mode.Game>[],
   } => {
     this.wordPool = List(wordPool);
     const currentSeedNumber = this.seedGenerator.next().value;
@@ -59,7 +60,7 @@ class MatchCardSession extends CardSession {
 
     if (!this.currentPlayer) throw Error(`Failed to start game. No player exists in the room.`);
 
-    const changeTurn: IResponseAction<ServerActionType.ChangeTurns> = {
+    const changeTurn: IResponseAction<ServerActionType.ChangeTurns, Mode.Game> = {
       type: ServerActionType.ChangeTurns,
       payload: this.currentPlayer,
       player: this.currentPlayer.name,
@@ -69,7 +70,7 @@ class MatchCardSession extends CardSession {
     this.getAllMemberNames().forEach(name => initialScores[name] = 0);
     this.scores = Map(initialScores);
 
-    const setScores: IResponseAction<ServerActionType.SetScores> = {
+    const setScores: IResponseAction<ServerActionType.SetScores, Mode.Game> = {
       type: ServerActionType.SetScores,
       payload: this.scores,
     }
@@ -81,19 +82,21 @@ class MatchCardSession extends CardSession {
     }
   }
 
-  public openCard = (action: ICardAction): [IResponseAction<ServerActionType.UpdateCardStates>]=> {
-    const { position, player } = action;
-    const currentCard = this.shuffledCards.get(action.position);
-    if (action.type !== ClientActionType.Open) throw Error(`Error: trying to open card ${action.position} when card action is not matched.`);
+  public createInitialMatchCardStates = (wordNumber: number, initialCardState: CardState<Mode.Game>): List<CardState<Mode.Game>> => List(Array(wordNumber*2).fill(initialCardState));
 
-    if (!currentCard) throw Error(`Error: card ${action.position} does not exist.`);
+  public openCard = (action: ICardAction): [IResponseAction<ServerActionType.UpdateCardStates, Mode.Game>]=> {
+    const { position, player } = action;
+    const currentCard = this.shuffledCards.get(position);
+    if (action.type !== ClientActionType.Open) throw Error(`Error: trying to open card ${position} when card action is not matched.`);
+
+    if (!currentCard) throw Error(`Error: card ${position} does not exist.`);
 
     this.cardStates = this.cardStates.set(position, {
       isActive: true,
       isOpen: true,
     });
 
-    const openCard: IResponseAction<ServerActionType.UpdateCardStates> = {
+    const openCard: IResponseAction<ServerActionType.UpdateCardStates, Mode.Game> = {
       type: ServerActionType.UpdateCardStates,
       payload: this.cardStates,
       player,
@@ -101,7 +104,7 @@ class MatchCardSession extends CardSession {
     return [openCard];
   }
 
-  public implementGameAction = (action: ICardAction): AllServerActionType[] | undefined => {
+  public implementGameAction = (action: ICardAction): AllServerActionType<Mode.Game>[] | undefined => {
     const { position, type, player } = action;
     const currentState = this.cardStates && this.cardStates.get(position);
     const currentCard = this.shuffledCards.get(action.position);
@@ -134,7 +137,7 @@ class MatchCardSession extends CardSession {
             }
           );
 
-          const deactivateCard: IResponseAction<ServerActionType.UpdateCardStates> = {
+          const deactivateCard: IResponseAction<ServerActionType.UpdateCardStates, Mode.Game> = {
             type: ServerActionType.UpdateCardStates,
             payload: this.cardStates,
             player,
@@ -150,13 +153,13 @@ class MatchCardSession extends CardSession {
           // Clean up flippedCard
           this.flippedCard = undefined;
 
-          const setScores: IResponseAction<ServerActionType.SetScores> = {
+          const setScores: IResponseAction<ServerActionType.SetScores, Mode.Game> = {
             type: ServerActionType.SetScores,
             payload: this.scores,
             player,
           }
 
-          let endGame: IResponseAction<ServerActionType.EndGame> | null = null;
+          let endGame: IResponseAction<ServerActionType.EndGame, Mode.Game> | null = null;
           if (this.matchedPairs === this.wordNumber) {
             const maxScore = this.scores.max();
             const winners = this.scores.filter((v) => v === maxScore).keySeq().toArray();
@@ -188,7 +191,7 @@ class MatchCardSession extends CardSession {
             }
           );
 
-          const closeCards: IResponseAction<ServerActionType.UpdateCardStates> = {
+          const closeCards: IResponseAction<ServerActionType.UpdateCardStates, Mode.Game> = {
             type: ServerActionType.UpdateCardStates,
             payload: this.cardStates,
             player,
@@ -198,7 +201,7 @@ class MatchCardSession extends CardSession {
           this.currentPlayer = this.getNextPlayer();
           if (!this.currentPlayer) throw Error('Next player does not exist. Cannot change turns');
 
-          const changeTurn: IResponseAction<ServerActionType.ChangeTurns> = {
+          const changeTurn: IResponseAction<ServerActionType.ChangeTurns, Mode.Game> = {
             type: ServerActionType.ChangeTurns,
             payload: this.currentPlayer,
             player: this.currentPlayer.name,
