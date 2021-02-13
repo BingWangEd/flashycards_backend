@@ -2,10 +2,10 @@ import { Map } from 'immutable';
 import MatchCardSession from "./class/MatchCardSession";
 import { RoomState, ICardAction, ClientActionType } from './class/CardSession';
 import FreeCardSession, { ICardLayoutRules } from './class/FreeCardSession';
+import * as http from 'http';
+import socketIO from 'socket.io';
+import dotenv from 'dotenv';
 
-const http = require('http');
-const socketIO = require('socket.io');
-const dotenv = require('dotenv')
 const ENV = process.env.NODE_ENV || 'development'
 
 if (ENV === 'development') dotenv.config();
@@ -152,20 +152,23 @@ io.on('connection', (client: SocketIO.Socket) => {
     
     // TODO: automate the process. let implementGameAction takes care of all??
     switch (action.type) {
-      case ClientActionType.Open:
+      case ClientActionType.Open: {
         const flipCardAction = room.openCard(action as ICardAction<ClientActionType.Open>);
         client.to(action.roomCode).emit(WebSocketEmissionEvent.UpdateGameState, flipCardAction);
         break;
-      case ClientActionType.Move:
+      }
+      case ClientActionType.Move: {
         if (!(room instanceof FreeCardSession)) return;
         const moveCardAction = room.moveCard(action as ICardAction<ClientActionType.Move>);
         client.to(action.roomCode).emit(WebSocketEmissionEvent.UpdateGameState, moveCardAction);
         break;
-      case ClientActionType.Drop:
+      }
+      case ClientActionType.Drop: {
         if (!(room instanceof FreeCardSession)) return;
         const dropCardAction = room.dropCard(action as ICardAction<ClientActionType.Drop>);
         client.to(action.roomCode).emit(WebSocketEmissionEvent.UpdateGameState, dropCardAction);
         break;
+      }
     }
 
     const actions = room.implementGameAction(action);
@@ -188,7 +191,6 @@ io.on('connection', (client: SocketIO.Socket) => {
   });
 });
 
-server.listen(PORT, (error: Error) => {
-  if (error) throw error;
+server.listen(PORT, () => {
   console.log(`listening on port ${PORT}`);
 });
