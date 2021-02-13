@@ -144,19 +144,31 @@ io.on('connection', (client: SocketIO.Socket) => {
     }
   });
 
-  client.on(WebSocketEvent.SendAction, (action: ICardAction) => {
+  client.on(WebSocketEvent.SendAction, (action: ICardAction<ClientActionType>) => {
     // TODO: always send some response back
     const room = CurrentRooms.get(action.roomCode);
 
     if (!io.sockets.adapter.rooms[action.roomCode] || !room) return; // TODO: error handling
     
-    if (action.type === ClientActionType.Open) {
-      const openAction = room.openCard(action);
-      client.to(action.roomCode).emit(WebSocketEmissionEvent.UpdateGameState, openAction);
+    // TODO: automate the process. let implementGameAction takes care of all??
+    switch (action.type) {
+      case ClientActionType.Open:
+        const flipCardAction = room.openCard(action as ICardAction<ClientActionType.Open>);
+        client.to(action.roomCode).emit(WebSocketEmissionEvent.UpdateGameState, flipCardAction);
+        break;
+      case ClientActionType.Move:
+        if (!(room instanceof FreeCardSession)) return;
+        const moveCardAction = room.moveCard(action as ICardAction<ClientActionType.Move>);
+        client.to(action.roomCode).emit(WebSocketEmissionEvent.UpdateGameState, moveCardAction);
+        break;
+      case ClientActionType.Drop:
+        if (!(room instanceof FreeCardSession)) return;
+        const dropCardAction = room.dropCard(action as ICardAction<ClientActionType.Drop>);
+        client.to(action.roomCode).emit(WebSocketEmissionEvent.UpdateGameState, dropCardAction);
+        break;
     }
 
     const actions = room.implementGameAction(action);
-
     actions && io.to(action.roomCode).emit(WebSocketEmissionEvent.UpdateGameState, actions);
   });
 

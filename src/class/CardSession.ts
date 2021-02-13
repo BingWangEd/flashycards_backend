@@ -15,6 +15,8 @@ export interface MatchCardState {
 
 export enum ClientActionType {
   Open = 'open',
+  Move = 'move',
+  Drop = 'drop',
 }
 
 export enum CardSide {
@@ -50,10 +52,23 @@ export interface IMember {
   socketId: string,
 }
 
-export interface ICardAction {
-  type: ClientActionType;
+type MovedDimensions = {
+  x: number,
+  y: number,
+}
+
+type CardPosition = {
+  x: number,
+  y: number,
+}
+
+export interface ICardAction<T extends ClientActionType> {
+  type: T;
   position: number;
-  player: string;
+  player?: string;
+  payload: T extends ClientActionType.Move ? MovedDimensions : (
+    T extends ClientActionType.Drop ? CardPosition : null
+  ); 
   roomCode: string;
 }
 
@@ -64,8 +79,7 @@ export type IResponseAction<T extends ServerActionType, M extends Mode> = {
   payload: T extends ServerActionType.ChangeTurns ? IMember :
     T extends ServerActionType.EndGame ? string[] :
     T extends ServerActionType.SetScores ? Map<string, number> : 
-    T extends ServerActionType.SetMembers ? List<string> :
-    List<CardState<M>>; // when ActionType is `UpdateCardStates`, return cardStates directly
+    T extends ServerActionType.SetMembers ? List<string> : List<CardState<M>>; // when ActionType is `UpdateCardStates`, return cardStates directly
   player?: string;
   timeout?: number;
 }

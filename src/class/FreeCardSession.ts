@@ -127,10 +127,9 @@ class FreeCardSession extends CardSession<Mode.Free> {
     }
   }
 
-  public openCard = (action: ICardAction): [IResponseAction<ServerActionType.UpdateCardStates, Mode.Free>]=> {
+  public openCard = (action: ICardAction<ClientActionType.Open>): [IResponseAction<ServerActionType.UpdateCardStates, Mode.Free>]=> {
     const { position, player } = action;
     const currentCard = this.shuffledCards.get(position);
-    if (action.type !== ClientActionType.Open) throw Error(`Error: trying to open card ${action.position} when card action is not matched.`);
 
     if (!currentCard) throw Error(`Error: card ${action.position} does not exist.`);
 
@@ -150,8 +149,61 @@ class FreeCardSession extends CardSession<Mode.Free> {
     return [openCard];
   }
 
-  public implementGameAction = (): void => {
+  public moveCard = (action: ICardAction<ClientActionType.Move>): [IResponseAction<ServerActionType.UpdateCardStates, Mode.Free>] | [] => {
+    const { position, payload, player } = action;
+    
+    const currentCard = this.shuffledCards.get(position);
+    if (!currentCard) throw Error(`Error: card ${action.position} does not exist.`);
+
+    const currentCardState = this.cardStates.get(position);
+    if (!currentCardState) throw Error('Error: card ' + position + ' does not exist.');
+
+    this.cardStates = this.cardStates.set(position, {
+      ...currentCardState,
+      position: {
+        x: currentCardState.position.x + payload.x,
+        y: currentCardState.position.y + payload.y,
+      }
+    });
+
+    const moveCard: IResponseAction<ServerActionType.UpdateCardStates, Mode.Free> = {
+      type: ServerActionType.UpdateCardStates,
+      payload: this.cardStates,
+      player,
+    };
+
+    return [moveCard];
+  }
+
+  public dropCard = (action: ICardAction<ClientActionType.Drop>): [IResponseAction<ServerActionType.UpdateCardStates, Mode.Free>] => {
+    const { position, payload, player } = action;
+    
+    const currentCard = this.shuffledCards.get(position);
+    if (!currentCard) throw Error(`Error: card ${action.position} does not exist.`);
+
+    const currentCardState = this.cardStates.get(position);
+    if (!currentCardState) throw Error('Error: card ' + position + ' does not exist.');
+
+    this.cardStates = this.cardStates.set(position, {
+      ...currentCardState,
+      position: {
+        x: payload.x,
+        y: payload.y,
+      }
+    });
+
+    const dropCard: IResponseAction<ServerActionType.UpdateCardStates, Mode.Free> = {
+      type: ServerActionType.UpdateCardStates,
+      payload: this.cardStates,
+      player,
+    };
+
+    return [dropCard];
+  }
+
+  public implementGameAction = (action: ICardAction<ClientActionType>): undefined => {
     console.log('free card mode implementGameAction');
+    return undefined;
   };
 }
 

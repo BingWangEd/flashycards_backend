@@ -84,7 +84,7 @@ class MatchCardSession extends CardSession<Mode.Game> {
 
   public createInitialMatchCardStates = (wordNumber: number, initialCardState: CardState<Mode.Game>): List<CardState<Mode.Game>> => List(Array(wordNumber*2).fill(initialCardState));
 
-  public openCard = (action: ICardAction): [IResponseAction<ServerActionType.UpdateCardStates, Mode.Game>]=> {
+  public openCard = (action: ICardAction<ClientActionType.Open>): [IResponseAction<ServerActionType.UpdateCardStates, Mode.Game>]=> {
     const { position, player } = action;
     const currentCard = this.shuffledCards.get(position);
     if (action.type !== ClientActionType.Open) throw Error(`Error: trying to open card ${position} when card action is not matched.`);
@@ -104,7 +104,7 @@ class MatchCardSession extends CardSession<Mode.Game> {
     return [openCard];
   }
 
-  public implementGameAction = (action: ICardAction): AllServerActionType<Mode.Game>[] | undefined => {
+  public implementGameAction = (action: ICardAction<ClientActionType>): AllServerActionType<Mode.Game>[] | undefined => {
     const { position, type, player } = action;
     const currentState = this.cardStates && this.cardStates.get(position);
     const currentCard = this.shuffledCards.get(action.position);
@@ -142,6 +142,8 @@ class MatchCardSession extends CardSession<Mode.Game> {
             payload: this.cardStates,
             player,
           }
+
+          if (!player) throw Error('Player does not exist')
 
           // Increment matchedPairs and player score
           this.matchedPairs = this.matchedPairs + 1;
