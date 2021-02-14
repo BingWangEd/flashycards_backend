@@ -14,14 +14,20 @@ export enum Content {
   None = 'none',
 }
 
+export enum ZindexLayer {
+  Normal = 0,
+  Upper = 10,
+}
+
 export interface IFreeCardState {
-  // id: number;
   isFaceUp?: boolean;
   isActive?: boolean;
+  zIndex: ZindexLayer;
   position: {
     x: number, 
     y: number
   };
+
 }
 
 export interface IFreeCard {
@@ -111,6 +117,7 @@ class FreeCardSession extends CardSession<Mode.Free> {
           isFaceUp: true,
           isActive: true,
           position: this.getPositions(layoutRules.length, setNumber, wordNumber, groupWordsBySet) || { x: 0, y: 0 },
+          zIndex: ZindexLayer.Normal,
         }
       });
 
@@ -181,14 +188,26 @@ class FreeCardSession extends CardSession<Mode.Free> {
     const currentCard = this.shuffledCards.get(position);
     if (!currentCard) throw Error(`Error: card ${action.position} does not exist.`);
 
-    const currentCardState = this.cardStates.get(position);
-    if (!currentCardState) throw Error('Error: card ' + position + ' does not exist.');
+    this.cardStates.forEach((cardState, index) => {
+      const currentCardState = this.cardStates.get(index);
+      if (!currentCardState) throw Error('Error: card ' + index + ' does not exist.');
 
-    this.cardStates = this.cardStates.set(position, {
-      ...currentCardState,
-      position: {
-        x: payload.x,
-        y: payload.y,
+      if (index === position) {
+        this.cardStates = this.cardStates.set(position, {
+          ...currentCardState,
+          position: {
+            x: payload.x,
+            y: payload.y,
+          },
+          zIndex: ZindexLayer.Upper,
+        });
+      } else {
+        if (cardState.zIndex !== ZindexLayer.Normal) {
+          this.cardStates = this.cardStates.set(index, {
+            ...currentCardState,
+            zIndex: ZindexLayer.Normal,
+          });
+        }
       }
     });
 
