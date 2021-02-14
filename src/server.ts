@@ -25,6 +25,8 @@ enum WebSocketEmissionEvent {
   ConfirmRoom = 'confirmed room exists',
   RejectRoom = 'rejected room exists',
   JoinRoom = 'joined room',
+  ChangeName = 'need to change name',
+  MismatchGameMode = 'mismatched game mode',
   CreateNewRoom = 'created new room',
   ReadyToSetLayout = 'ready to set layout',
   StartGame = 'started game',
@@ -100,11 +102,15 @@ io.on('connection', (client: SocketIO.Socket) => {
     }
   });
 
-  client.on(WebSocketEvent.EnterRoom, ({roomCode}) => {
+  client.on(WebSocketEvent.EnterRoom, ({roomCode, gameMode}) => {
     const room = CurrentRooms.get(roomCode);
     if (io.sockets.adapter.rooms[roomCode] && room && room.roomState === RoomState.Open)
     {
-      client.emit(WebSocketEmissionEvent.ConfirmRoom, { roomCode });
+      if ((gameMode === Mode.Free && !(room instanceof FreeCardSession)) || (gameMode === Mode.Game && !(room instanceof MatchCardSession))) {
+        client.emit(WebSocketEmissionEvent.MismatchGameMode, { roomCode, gameMode });
+      } else {
+        client.emit(WebSocketEmissionEvent.ConfirmRoom, { roomCode });
+      }
     } else {
       client.emit(WebSocketEmissionEvent.RejectRoom, { roomCode });
     }
@@ -115,6 +121,10 @@ io.on('connection', (client: SocketIO.Socket) => {
     if (io.sockets.adapter.rooms[roomCode] && room && room.roomState === RoomState.Open)
     {
       client.join(roomCode);
+      if (room.checkNameExists(playerName)) {
+        client.emit(WebSocketEmissionEvent.ChangeName, { playerName });
+        return;
+      }
       const actions = room.addMember(client.id, playerName, playerRole);
 
       if (actions === undefined) return; // don't send out signal
@@ -137,6 +147,7 @@ io.on('connection', (client: SocketIO.Socket) => {
       const gameSetup = room.createNewGame(words);
 
       if (room instanceof MatchCardSession) {
+        room.roomState = RoomState.Locked;
         io.to(roomCode).emit(WebSocketEmissionEvent.StartGame, gameSetup);
       } else {
         io.to(roomCode).emit(WebSocketEmissionEvent.ReadyToSetLayout);
@@ -188,6 +199,7 @@ io.on('connection', (client: SocketIO.Socket) => {
 
     const gameSetup = room.createInitialCardStates(layoutRules, groupWordsBySet);
     io.to(roomCode).emit(WebSocketEmissionEvent.StartGame, gameSetup);
+    room.roomState = RoomState.Locked;
   });
 });
 

@@ -105,6 +105,10 @@ class CardSession<M extends Mode> {
 
   public getSeed = (): number => this.seedGenerator.next().value;
 
+  public checkNameExists = (playerName: string): boolean => {
+    return Boolean(this.members.filter(member => member.name === playerName).size);
+  }
+
   public addMember = (socketId: string, playerName: string, playerRole: string): AllServerActionType<M>[] | undefined => {
     if (this.roomState === RoomState.Open) {
       const member = {
