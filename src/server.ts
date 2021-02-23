@@ -44,7 +44,7 @@ console.log(`Port: ${PORT}`);
 
 let CurrentRooms = Map<string, MatchCardSession | FreeCardSession>();
 
-const RoomNames = ['Apple', 'Watermelon', 'Orange', 'Strawberry', 'Grape', 'Blueberry', 'Lychee', 'Pear', 'Banana', 'Tangerine'];
+const RoomNames = ['APPLE', 'WATERMELON', 'ORANGE', 'STRAWBERRY', 'GRAPE', 'BLUEBERRY', 'LYCHEE', 'PEAR', 'BANANA', 'TANGERINE'];
 
 const server = http.createServer();
 const io = socketIO(server, {
@@ -187,10 +187,10 @@ io.on('connection', (client: SocketIO.Socket) => {
   });
 
   client.on(WebSocketEvent.ConfirmCardsLayout, ({ roomCode, layoutRules, groupWordsBySet }: {
-    words: [string, string][],
-    layoutRules: ICardLayoutRules[], 
-    roomCode: string,
-    groupWordsBySet: boolean,
+    words: [string, string][];
+    layoutRules: ICardLayoutRules[];
+    roomCode: string;
+    groupWordsBySet: boolean;
   }) => {
     const room = CurrentRooms.get(roomCode);
     if (!io.sockets.adapter.rooms[roomCode] || !room) throw Error(`${roomCode} does not exist`); // TODO: more elegant error handling 
